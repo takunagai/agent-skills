@@ -39,3 +39,4 @@ ln -s ~/Projects/agent-skills/skills/<name> ~/.agents/skills/<name>
 | スキル | 概要 | ドキュメント |
 |--------|------|-------------|
 | cc-fork-delete | Claude Code のフォークセッションを sid 指定で安全削除（dry-run → 確認 → 実行、既定はゴミ箱退避） | [docs/cc-fork-delete.md](docs/cc-fork-delete.md) |
+| astro-code-review | Astro 6.0+ プロジェクト（Cloudflare デプロイ対応）のコードを体系的にレビュー。ベストプラクティス違反・パフォーマンス・a11y・型安全性・Astro 6.0 移行問題を検出 | [docs/astro-code-review.md](docs/astro-code-review.md) |

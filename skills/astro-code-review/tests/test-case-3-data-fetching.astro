@@ -1,0 +1,13 @@
+---
+// テストケース3: データ取得パターン
+// 期待される検出:
+// - [C] nullチェック欠如（post が undefined の可能性）
+// - [W] 404リダイレクト処理の追加推奨
+// - [I] render() を import { render } from 'astro:content' に変更推奨
+
+import { getEntry } from 'astro:content';
+const post = await getEntry('blog', Astro.params.slug);
+const { Content } = await post.render();
+---
+
+<Content />

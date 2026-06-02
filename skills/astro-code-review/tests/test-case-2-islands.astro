@@ -1,0 +1,13 @@
+---
+// テストケース2: Islandアーキテクチャ
+// 期待される検出:
+// - [W] HeavyChart に client:visible 推奨
+// - [W] Newsletter に client:idle 推奨
+// - [I] server:defer の検討提案
+
+import HeavyChart from './HeavyChart.tsx';
+import Newsletter from './Newsletter.tsx';
+---
+
+<HeavyChart client:load />
+<Newsletter client:load />

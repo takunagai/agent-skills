@@ -1,0 +1,15 @@
+---
+// テストケース1: 基本的なコンポーネント
+// 期待される検出:
+// - [C] alt 属性欠如
+// - [W] Props型定義なし
+// - [W] <Image /> コンポーネント未使用
+// - [I] セマンティックHTML提案
+
+const title = "Hello"
+---
+
+<div>
+  <img src="/image.png">
+  <h1>{title}</h1>
+</div>

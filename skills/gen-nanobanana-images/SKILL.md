@@ -1,0 +1,452 @@
+---
+name: gen-nanobanana-images
+description: "Generate and edit images using Google Gemini image models (Nano Banana series). Supports text-to-image, image editing, and multi-turn refinement with Flash (fast/draft), Flash2 (recommended/balanced), and Pro (production/4K) models. Use when users request: (1) AI image generation from text, (2) editing or modifying existing images, (3) iterative multi-turn image refinement, (4) text rendering in images, or (5) infographics and visualizations with Gemini models."
+---
+
+# Nano Banana Image Generation
+
+## Overview
+
+Generate and edit images using Google's Nano Banana series: Flash (fast draft), Flash2/Nano Banana 2 (recommended, balanced speed+features), and Pro (production quality). Supports text-to-image generation, image editing with input images, and multi-turn iterative refinement with session persistence.
+
+### Prerequisites
+
+- **API Key**: `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable (get at https://aistudio.google.com/apikey)
+- **Dependencies**: `pip install google-genai Pillow` (see `requirements.txt`)
+
+## Workflow Decision Tree
+
+Determine which workflow to use:
+
+1. **Want to create a new image from text?** → Go to [Text-to-Image Generation](#text-to-image-generation)
+2. **Want to edit or modify an existing image?** → Go to [Image Editing](#image-editing)
+3. **Want to apply a style from reference images?** → Go to [Style Reference](#style-reference) (flash2/pro)
+4. **Want to iteratively refine an image over multiple turns?** → Go to [Multi-Turn Editing](#multi-turn-editing) (flash2/pro)
+5. **Need factual/grounded image content?** → Go to [Google Search Grounding](#google-search-grounding) (flash2/pro)
+6. **Need image-based search results?** → Go to [Image Search Grounding](#image-search-grounding) (flash2 only)
+
+## Gathering Parameters
+
+Before running the script, collect all required parameters from the user. Follow these principles:
+
+### Information Collection Principles
+
+1. **Do not re-ask what's already known** — If the user says "Pro で 16:9 の夕焼け", model (Pro), aspect ratio (16:9), and subject (sunset) are already determined. Only collect missing parameters.
+2. **Ask for image description first** — If the user hasn't described what to generate, ask in plain text (AskUserQuestion choices can't express open-ended image descriptions well).
+3. **Batch remaining parameters in a single AskUserQuestion** — Collect all missing options in one interaction to minimize back-and-forth.
+
+### Standard Parameter Collection (Text-to-Image)
+
+After understanding the image description, collect missing parameters with **one AskUserQuestion call** containing up to 3 questions:
+
+**Question 1: Model (header: "Model")**
+
+| Option | Label | Description |
+|--------|-------|-------------|
+| 1 | Flash2 (Recommended) | 高速＋高機能（マルチターン・4K・検索連携対応）。最もバランスが良い |
+| 2 | Pro | 最高品質・テキスト描画精度最高。本番の重要な制作物向け |
+| 3 | Flash | 旧版。超高速だが機能制限あり（1K・単発のみ） |
+
+**Question 2: Aspect Ratio (header: "Ratio")**
+
+| Option | Label | Description |
+|--------|-------|-------------|
+| 1 | 1:1 Square | SNS 投稿、アイコン、プロフィール画像 |
+| 2 | 16:9 Landscape | YouTube サムネイル、プレゼン、バナー |
+| 3 | 9:16 Portrait | スマホ壁紙、Instagram/TikTok ストーリーズ |
+
+User can select "Other" to type custom ratios like 3:2, 4:3, 2:3, 4:5, 5:4, 21:9, 1:4, 4:1, 1:8, 8:1 (ultra-wide/tall ratios are flash2 only).
+
+**Question 3: Style (header: "Style")**
+
+| Option | Label | Description |
+|--------|-------|-------------|
+| 1 | Photorealistic | 写真のようなリアルな描写、スタジオ撮影風 |
+| 2 | Illustration | デジタルアート、アニメ、手描き風イラスト |
+| 3 | 3D Render | CGI、プロダクトビジュアライゼーション |
+
+User can select "Other" to type custom styles like watercolor, oil painting, pixel art, etc.
+
+**Optional: Number of Variations** — If the user wants multiple variations (e.g., "3パターン出して"), set `-N` accordingly (max 10). Default is 1 if not mentioned.
+
+### Flash2/Pro Model Follow-Up (Conditional)
+
+If the user selects **Flash2** or **Pro**, ask a **second AskUserQuestion** with up to 2 questions:
+
+**Question 1: Resolution (header: "Resolution")**
+
+| Option | Label | Description |
+|--------|-------|-------------|
+| 1 | 1K (Recommended) | 標準解像度。速度とコストのバランスが良い |
+| 2 | 2K | 高解像度。印刷や大画面表示向け |
+| 3 | 4K | 最高解像度。生成に最大6分かかる場合あり |
+| 4 | 512px | アイコン・サムネイル用の小サイズ（flash2 のみ） |
+
+**Question 2: Options (header: "Options", multiSelect: true)**
+
+| Option | Label | Description |
+|--------|-------|-------------|
+| 1 | テキスト描画あり | 画像内にテキストを正確に描画する |
+| 2 | Google Search 連携 | 事実に基づく正確な図解・インフォグラフィック（flash2/pro） |
+| 3 | Image Search 連携 | 画像検索ベースの正確な写実表現（flash2 のみ） |
+
+User may select none, one, or multiple.
+
+### Workflow-Specific Collection Patterns
+
+**Style Reference**: If the user provides reference images for style/composition guidance, collect the reference image paths and add them with `-r`.
+
+**Text-to-Image**: Description → AskUserQuestion (Model, Ratio, Style) → [Pro: follow-up] → Generate
+
+**Image Editing**: Confirm input image path → Describe changes → AskUserQuestion (Model only; Ratio and Style inherit from original image) → Generate
+
+**Multi-Turn Editing**: Ask new or continue → If new: same as Text-to-Image flow → If continue: ask only for next prompt, then execute with existing session
+
+### Prompt Assembly from Collected Parameters
+
+After collecting all parameters, Claude should automatically build a 6-element prompt:
+
+1. **User's description** → Expand into Subject + Action + Environment
+2. **Selected Style** → Append as the Style element
+3. **Composition and Lighting** → Claude supplements if not specified by the user
+4. **Text rendering** → If "テキスト描画あり" is selected, ensure text portions are wrapped in double quotes
+5. **Text language default** → 画像内に描画するテキストは、**ユーザーが言語を明示していない場合は日本語をデフォルト**とする。ただし以下の場合は英語または指定言語を使用:
+   - ユーザーが英語（または他言語）で明示的に指定した場合（例: `"HELLO WORLD" と書いて`）
+   - ブランド名・固有名詞がそのまま使われている場合（例: `"CAFE TOKYO"`）
+   - 技術用語・プログラミング関連で英語が自然な場合
+   - どちらが適切か判断が難しい場合は、AskUserQuestion でユーザーに確認する
+
+Example: User says "夕焼けの海辺の灯台" + Style: Photorealistic + Ratio: 16:9
+→ `"A lighthouse standing on a seaside cliff at sunset. Golden hour light casting long shadows across the rocky shore. Wide 16:9 cinematic framing. Photorealistic photography style."`
+
+Example: User says "セールのバナーを作って" + テキスト描画あり
+→ テキスト部分は `"夏のセール開催中"` のように日本語で生成（ユーザーが英語を指定していない限り）
+
+Example: User says "PREMIUM COFFEE のロゴを作って"
+→ `"PREMIUM COFFEE"` はブランド名として英語のまま使用
+
+## Model Selection
+
+Choose the right model for your task:
+
+| Feature | Flash (旧版) | Flash2 (推奨) | Pro (最高品質) |
+|---------|-------------|--------------|---------------|
+| Speed | Fast (~5-15s) | Fast (~5-15s) | Slower (~15-60s) |
+| Resolution | 1K only | 512px, 1K, 2K, 4K | 1K, 2K, 4K |
+| Text Rendering | Basic | Good | High accuracy |
+| Multi-Turn Editing | No | Yes | Yes |
+| Google Search | No | Yes | Yes |
+| Image Search | No | Yes (exclusive) | No |
+| Max Images/Prompt | 1 | 14 | 14 |
+| Aspect Ratios | 10 standard | 10 + 4 ultra (1:4, 4:1, 1:8, 8:1) | 10 standard |
+| Thinking Levels | minimal/low/medium/high | minimal/high | low/high |
+| Cost | Lowest | Low | Higher |
+
+**Recommendation**: Use **Flash2** (default) for most tasks — it offers Pro-level features at Flash speed. Use **Pro** when maximum text rendering accuracy is critical. Use **Flash** only for legacy compatibility.
+
+## Prompt Construction
+
+Build effective prompts using the **6-element structure**:
+
+1. **Subject** - What to generate
+2. **Action** - What it's doing
+3. **Environment** - Setting/background
+4. **Composition** - Camera angle, framing
+5. **Lighting** - Light quality/direction
+6. **Style** - Artistic style
+
+**Text rendering**: Wrap text in double quotes: `"プレミアム"` in the prompt to render text in the image. **画像内テキストのデフォルト言語は日本語**。ユーザーが英語や他言語を明示した場合、またはブランド名・固有名詞の場合はそのまま使用。判断が難しい場合はユーザーに確認する。
+
+When using AskUserQuestion-collected parameters, incorporate the selected **Style** as the final style element of the prompt. See [Prompt Assembly from Collected Parameters](#prompt-assembly-from-collected-parameters) for the full assembly process.
+
+For industry-specific templates and advanced techniques, see `references/prompt-engineering.md`.
+
+## Text-to-Image Generation
+
+Generate a new image from a text prompt.
+
+### Basic Generation (Flash2 — default)
+
+```bash
+python3 scripts/generate_image.py \
+  -p "A red apple on a white marble surface. Soft studio lighting. Photorealistic." \
+  -o ./output
+```
+
+### High-Quality Generation (Pro)
+
+```bash
+python3 scripts/generate_image.py \
+  -p "A futuristic cityscape at sunset with neon lights reflecting on wet streets. Wide shot, 16:9 cinematic framing. Volumetric lighting." \
+  -m pro \
+  -a 16:9 \
+  -s 2K \
+  -o ./output
+```
+
+### With Text Rendering (Pro recommended)
+
+```bash
+python3 scripts/generate_image.py \
+  -p 'A coffee shop storefront with a wooden sign reading "BREW & BLOOM" in elegant serif font.' \
+  -m pro \
+  -o ./output
+```
+
+### Multiple Variations (-N)
+
+Generate multiple image variations from the same prompt in one execution:
+
+```bash
+python3 scripts/generate_image.py \
+  -p "A red apple on a white marble surface. Soft studio lighting. Photorealistic." \
+  -N 3 \
+  -o ./output
+```
+
+Each variation is a separate API call, producing unique results. Files are named with `_v2`, `_v3` suffixes (e.g., `nanobanana_..._1.png`, `nanobanana_..._v2_1.png`, `nanobanana_..._v3_1.png`). With `-n city -N 4`: `city.png`, `city_v2.png`, `city_v3.png`, `city_v4.png`.
+
+**Note**: `-N` is not available with multi-turn mode (`--chat`/`--session`). Max 10 images per execution.
+
+**Note**: The script automatically appends Negative Constraints (`low quality, blurry, noisy...`) to every prompt for quality assurance.
+
+## Image Editing
+
+Edit an existing image with a text prompt describing the desired changes.
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Change the sky to a dramatic sunset with orange and purple clouds" \
+  -i original_photo.jpg \
+  -o ./output
+```
+
+### Multiple Image Editing (Pro)
+
+Edit or blend multiple images in a single prompt:
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Create a double exposure blending the portrait with the landscape" \
+  -i portrait.jpg landscape.jpg \
+  -m pro \
+  -o ./output
+```
+
+### Tips for Editing Prompts
+
+- Be specific: "Change the sky to sunset orange" rather than "Make it better"
+- Reference visible elements: "Add a cat on the windowsill"
+- Combine changes: "Add snow on the rooftops and change the sky to overcast gray"
+
+### Input Image Constraints
+
+- Max total file size: 7 MB (all images combined)
+- Supported formats: PNG, JPEG, WebP, HEIC, HEIF
+- Flash model: 1 image max (input or reference)
+- Flash2/Pro model: up to 14 images total (input + reference combined)
+
+## Style Reference
+
+Apply the visual style, color palette, or composition from reference images to new or existing images. Available with **Flash2** (default) and **Pro** models (multiple images require flash2/pro).
+
+### Generate with Style Reference
+
+```bash
+python3 scripts/generate_image.py \
+  -p "A mountain landscape at dawn. Soft pastel colors." \
+  -r style_painting.png \
+  -o ./output
+```
+
+### Edit with Style Reference
+
+Combine input image editing with style reference:
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Repaint this photograph in the reference artistic style" \
+  -i photo.jpg \
+  -r style_reference.png \
+  -o ./output
+```
+
+### Multiple Reference Images
+
+Use multiple references for blending styles:
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Combine the lighting from the first reference with the color palette from the second" \
+  -r lighting_ref.jpg palette_ref.jpg \
+  -o ./output
+```
+
+### Tips for Reference Prompts
+
+- Explicitly describe which aspects to reference: "color palette", "lighting style", "composition", "brush strokes"
+- Combine reference images with detailed text prompts for best results
+- Use Flash2 or Pro model (Flash only supports 1 image total)
+- See `references/prompt-engineering.md` for detailed style reference techniques
+
+## Multi-Turn Editing
+
+Iteratively refine images through conversational editing. Available with **Flash2** (default) and **Pro** models.
+
+The script manages thought signatures automatically through session files, enabling the model to understand and modify its previous output.
+
+### Start a New Chat Session
+
+```bash
+python3 scripts/generate_image.py \
+  -p "A cozy wooden cabin in a snowy forest. Warm light from windows. Evening atmosphere." \
+  -c \
+  -o ./output
+```
+
+This creates a session file (e.g., `session_20260210_143000.json`) in the output directory.
+
+### Continue the Session
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Add smoke coming from the chimney and a path of footprints in the snow" \
+  --session ./output/session_20260210_143000.json \
+  -o ./output
+```
+
+### How It Works
+
+1. Each turn's prompt, images, and thought signatures are saved to the session JSON
+2. On continuation, the full conversation history is rebuilt and sent to the API
+3. Thought signatures allow the model to understand its previous image composition
+4. You can continue editing for multiple turns with the same session file
+
+## Google Search Grounding
+
+Generate images grounded in real-world data using Google Search. Available with **Flash2** (default) and **Pro** models.
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Accurate anatomical diagram of the human heart with labeled chambers and valves. Medical illustration style." \
+  -g \
+  -o ./output
+```
+
+Best for: scientific diagrams, factual infographics, current event illustrations.
+
+## Image Search Grounding
+
+Generate images grounded in image search results. Only available with **Flash2** model.
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Photo of the latest iPhone model on a desk" \
+  --image-search \
+  -o ./output
+```
+
+Combine with Google Search for maximum accuracy:
+
+```bash
+python3 scripts/generate_image.py \
+  -p "Accurate photo of the latest Tesla Model Y exterior" \
+  --image-search -g \
+  -o ./output
+```
+
+Best for: product photos, real-world object references, current visual trends.
+
+## Script Parameters Reference
+
+| Argument | Short | Default | Description |
+|----------|-------|---------|-------------|
+| `--prompt` | `-p` | **Required** | Text prompt |
+| `--list-models` | | False | Query API for available image models |
+| `--model` | `-m` | `flash2` | `flash`, `flash2` (recommended), or `pro` |
+| `--input-image` | `-i` | None | Input image path(s) for editing (multiple OK) |
+| `--reference` | `-r` | None | Style/composition reference image path(s) |
+| `--num-images` | `-N` | `1` | 生成する画像の枚数 (max: 10) |
+| `--output-dir` | `-o` | `.` | Output directory |
+| `--output-name` | `-n` | Auto | Output filename (no extension) |
+| `--aspect-ratio` | `-a` | `1:1` | Aspect ratio |
+| `--image-size` | `-s` | None | Resolution (flash2: 512px/1K/2K/4K, pro: 1K/2K/4K) |
+| `--thinking-level` | `-t` | None | Thinking level |
+| `--google-search` | `-g` | False | Enable Google Search (flash2/pro) |
+| `--image-search` | | False | Enable Image Search (flash2 only) |
+| `--chat` | `-c` | False | Start new multi-turn session (flash2/pro) |
+| `--session` | | None | Continue existing session |
+| `--timeout` | | 120 | Timeout in seconds (auto 420s for 4K) |
+
+## Constraints
+
+- **Aspect ratios**: 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9 (all models) + 1:4, 4:1, 1:8, 8:1 (flash2 only)
+- **Image sizes**: flash2: 512px/1K/2K/4K, pro: 1K/2K/4K, flash: 1K only
+- **Max inline file size**: 7 MB total (all images combined)
+- **Thinking levels**: flash: minimal/low/medium/high, flash2: minimal/high, pro: low/high
+- **Max images per execution**: 10 (`-N` flag)
+- **Multi-turn/Google Search**: flash2, pro
+- **Image Search**: flash2 only
+
+## Configuration File
+
+デフォルト値は `config.json`（スキルディレクトリ直下、`SKILL.md` と同階層）で変更できます。ファイルが存在しない場合はビルトインデフォルトが使われます。CLI 引数は常に config より優先されます。
+
+### 設定可能なキー
+
+```json
+{
+  "model": "flash2",
+  "aspect_ratio": "1:1",
+  "output_dir": ".",
+  "num_images": 1,
+  "timeout": 120,
+  "thinking_level": null,
+  "negative_constraints": "Avoid: low quality, blurry, noisy, deformed hands, watermark, text artifacts, oversaturated colors."
+}
+```
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `model` | `"flash"` \| `"flash2"` \| `"pro"` | デフォルトモデル |
+| `aspect_ratio` | string | デフォルトアスペクト比 |
+| `output_dir` | string | デフォルト出力ディレクトリ |
+| `num_images` | int (1-10) | デフォルト生成枚数 |
+| `timeout` | int | デフォルトタイムアウト秒数 |
+| `thinking_level` | string \| null | デフォルト思考レベル |
+| `negative_constraints` | string | 品質担保用のネガティブプロンプト。空文字 `""` で無効化可能 |
+
+### 使用例
+
+常に Pro モデル・16:9・出力先固定にしたい場合:
+
+```json
+{
+  "model": "pro",
+  "aspect_ratio": "16:9",
+  "output_dir": "./output"
+}
+```
+
+必要なキーだけ記述すれば OK です。未指定のキーはビルトインデフォルトが使われます。
+
+## Error Handling
+
+| Issue | Solution |
+|-------|----------|
+| No API key | Set `GEMINI_API_KEY` env var |
+| Model not found (404) | Model ID may have changed; run `--list-models` to check |
+| No images in response | Prompt may be filtered; simplify content |
+| Rate limit (429) | Script auto-retries with backoff (max 3) |
+| 4K timeout | Auto-adjusted to 420s when `--image-size 4K` |
+| Import error | Run `pip install google-genai Pillow` |
+
+For detailed error codes and API specifications, see `references/api-reference.md`.
+
+## Dependencies
+
+```bash
+pip install -r requirements.txt
+# or directly:
+pip install google-genai Pillow
+```

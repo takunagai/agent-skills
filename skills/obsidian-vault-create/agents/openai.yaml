@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian Vault Creator"
+  short_description: "Create a new Obsidian vault with a standard folder layout."
+  default_prompt: "Create a new Obsidian vault with the standard layout and optional default settings."

@@ -1,0 +1,3 @@
+# 個人・案件固有のプリセットは追跡しない（公開サンプルは presets/example.md のみ）
+presets/*.local.md
+.DS_Store

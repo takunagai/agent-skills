@@ -1,0 +1,4 @@
+interface:
+  display_name: "図解ジェネレーター"
+  short_description: "日本語の内容を、構造とスタイルを選べる読みやすい図解画像へ変換する"
+  default_prompt: "$gen-infographic を使って、この内容を図解にしてください。"

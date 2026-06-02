@@ -1,0 +1,15 @@
+{
+  "model": "flash2",
+  "aspect_ratio": "3:2",
+  "image_size": "2K",
+  "timeout": 180,
+  "jpeg_quality": 92,
+  "scene_type_ratio": {
+    "wearing_lifestyle": 0.6,
+    "detail_closeup": 0.2,
+    "multi_item": 0.2
+  },
+  "max_input_images": 3,
+  "max_reference_images": 4,
+  "progress_report_intervals": [25, 50, 75, 100]
+}

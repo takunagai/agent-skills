@@ -1,0 +1,263 @@
+# cc-fork-delete
+
+Claude Code の**フォークセッション**（`/branch` で作った派生セッション）を、セッション ID を指定して **1 つだけ安全に削除する** スキルです。
+
+元のセッションは残したまま、指定したフォークだけを掃除します。削除はすべて同梱のシェルスクリプトが決定的に実行し、既定では完全削除ではなく**ゴミ箱への退避（復元可）**で行います。
+
+---
+
+## 何を解決するか
+
+Claude Code で `/branch` を使うと、元のセッションから派生した「フォーク」が作られます。試行錯誤を重ねると不要なフォークが溜まり、`~/.claude/` 配下に transcript（会話ログ JSONL）や付随ファイルが残り続けます。
+
+これらを手作業で `rm` すると、**元セッションや別のフォークを巻き込んで誤爆する**リスクがあります。このスキルは、対象が本当にフォークか・実行中でないかを検証したうえで、関連ファイルだけを過不足なく削除します。
+
+---
+
+## 主な特徴
+
+- **フォーク専用** — `forkedFrom`（親セッション情報）を持つセッションのみ対象。大元セッションを指定すると安全のため中止します。
+- **自分自身は消せない** — 現在実行中のセッションを対象にすると中止し、復帰方法を案内します。
+- **dry-run ファースト** — 既定は削除対象を一覧表示するだけ。`--apply` を付けて初めて実行されます。
+- **既定はゴミ箱退避** — `~/.claude/.trash/forks/<sid>_<日時>/` へ移動するため復元可能。完全削除したいときだけ `--purge` を付けます。
+- **関連ファイルを横断的に掃除** — transcript・subagents ディレクトリ・`sessions` メタに加え、（後述のロギングフック利用時は）ノートツール側の索引行・全文ログも対象にします。
+- **厳密一致での特定** — UUID 形式チェック、フル ID の完全一致、メタファイル内 `sessionId` の厳密一致で対象を絞り、巻き込みを防ぎます。
+
+---
+
+## 動作環境・前提
+
+| 項目 | 内容 |
+|------|------|
+| 対象 | Claude Code（`/branch` でフォークを作る運用をしている環境） |
+| OS | macOS（`stat -f` を使用。Linux では一部調整が必要） |
+| 依存 | `bash` / `python3` / `find` / `grep` |
+| 実体の場所 | `~/Projects/agent-skills/skills/cc-fork-delete/`（各エージェントのスキルディレクトリへ symlink して使う） |
+
+---
+
+## インストール
+
+このリポジトリを clone し、スキル本体（`skills/cc-fork-delete`）を各エージェントのスキルディレクトリへ **symlink** します。実体は 1 つ、参照を複数張る方式です。
+
+```bash
+# 1) リポジトリを取得
+git clone git@github.com:takunagai/agent-skills.git ~/Projects/agent-skills
+
+# 2) Claude Code 用に symlink
+ln -s ~/Projects/agent-skills/skills/cc-fork-delete ~/.claude/skills/cc-fork-delete
+
+# 3)（任意）Codex など他エージェント用に symlink
+ln -s ~/Projects/agent-skills/skills/cc-fork-delete ~/.agents/skills/cc-fork-delete
+```
+
+スキル本体の構成は次の通りです（人間用マニュアルである本ファイルは、スキル本体の外＝`docs/` に置いています）。
+
+```
+skills/cc-fork-delete/
+├── SKILL.md          # スキル定義（Claude がトリガー時に読む）
+├── delete-fork.sh    # 削除ロジック本体
+└── tests/            # 回帰テスト一式
+```
+
+スクリプトに実行権限がない場合は付与します。
+
+```bash
+chmod +x ~/Projects/agent-skills/skills/cc-fork-delete/delete-fork.sh
+```
+
+---
+
+## 使い方
+
+### スキル経由（推奨）
+
+Claude Code との会話で依頼すると発動します。Claude は **「sid の特定 → dry-run でプレビュー → 最終確認 → 実行」** の順に進め、`rm` を勝手に打つことはありません。
+
+下記は用途別の実用プロンプト集です。状況に合わせてそのまま使えます。
+
+#### 1. sid が分かっている場合（最短）
+
+```text
+フォーク 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d を削除して。
+まず dry-run でプレビューを見せて。
+```
+
+#### 2. sid が分からない・探すところから
+
+```text
+さっき /branch で作ったフォークを消したい。
+sid が分からないので、どこで確認できるか教えてから進めて。
+```
+
+> Claude は `/branch` 実行時の出力・ステータスラインの `sid:`・索引（`Log/Session/_Index/`）から拾えることを案内します。
+
+#### 3. 退避ではなく完全に消したい
+
+```text
+このフォーク <sid> を完全削除（復元不可）で消して。
+dry-run で対象を確認したら、--purge で実行していい。
+```
+
+> 完全削除は明示しても、Claude は実行前に必ず最終確認を取ります。
+
+#### 4. 削除前に「何が消えるか」だけ知りたい
+
+```text
+フォーク <sid> を消すと何が削除されるか、dry-run で一覧だけ見せて。
+実行はまだしないで。
+```
+
+#### 5. 実行中セッションを消そうとしてブロックされたとき
+
+```text
+今いるセッションがフォークだった。これを消したいので、
+安全に削除できる状態まで誘導して。
+```
+
+> 自分自身は削除できないため、Claude は `claude -r <forkedFrom>` で元へ戻るか、別ターミナルから実行する手順を案内します。
+
+#### 6. 削除後に元へ戻したい（退避モード）
+
+```text
+さっき退避したフォーク <sid> を元に戻したい。退避先を教えて。
+```
+
+> 退避先 `~/.claude/.trash/forks/<sid>_<日時>/` を案内します。
+
+#### 7. ノートツール連携を含めて掃除したい
+
+```text
+ロギングフックで Vault に記録しているフォーク <sid> を、
+索引行と全文ログも含めてまとめて掃除して。dry-run から。
+```
+
+#### 8. スクリプトを編集したあとの動作確認
+
+```text
+delete-fork.sh を編集した。回帰テストを走らせて結果を報告して。
+```
+
+> `tests/run-tests.sh` を実行し、全パス（exit 0）かどうかを報告します。
+
+### スクリプトを直接叩く場合
+
+セッション ID（`sid`）は、`/branch` 実行時の出力、ステータスラインの `sid:`、または索引から確認できます。パスは symlink 先（`~/.claude/skills/cc-fork-delete/`）でも実体（`~/Projects/agent-skills/skills/cc-fork-delete/`）でも構いません。
+
+```bash
+# 1) dry-run（削除対象を表示するだけ。既定・非破壊）
+~/.claude/skills/cc-fork-delete/delete-fork.sh <sid>
+
+# 2) 実行（ゴミ箱へ退避＝復元可。推奨）
+~/.claude/skills/cc-fork-delete/delete-fork.sh <sid> --apply
+
+# 3) 完全削除（復元不可。明示的に必要なときだけ）
+~/.claude/skills/cc-fork-delete/delete-fork.sh <sid> --apply --purge
+```
+
+`<sid>` は UUID 形式（例: `1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d`）です。
+
+---
+
+## 出力例（dry-run）
+
+```
+==== フォーク削除プレビュー ====
+対象セッション   : 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+フォーク元(残す) : 9f8e7d6c-5b4a-3c2d-1e0f-9a8b7c6d5e4f
+プロジェクト     : /Users/you/.claude/projects/-Users-you-project
+方式             : ゴミ箱退避（復元可）
+--- セッション実体（削除/退避）---
+  /Users/you/.claude/projects/.../1a2b3c4d-....jsonl
+--- Vault 全文ログ（ファイルごと削除/退避）---
+  （なし）
+--- Vault 索引（該当行のみ削除。ファイルは残す）---
+  （なし）
+
+これは dry-run です。実行するには --apply（完全削除は --apply --purge）を付けてください。
+```
+
+---
+
+## 削除の対象範囲
+
+| 対象 | 場所 | 扱い |
+|------|------|------|
+| transcript（会話ログ） | `~/.claude/projects/<proj>/<sid>.jsonl` | 削除/退避 |
+| 付随ディレクトリ（subagents 等） | `~/.claude/projects/<proj>/<sid>/` | 削除/退避 |
+| sessions メタ | `~/.claude/sessions/*.json`（`sessionId` 厳密一致） | 削除/退避 |
+| 全文ログ（フック利用時） | Vault の `Log/Session/*.md`（ヘッダ行で判定） | 削除/退避 |
+| 索引（フック利用時） | Vault の `Log/Session/_Index/*.md` | **該当行のみ**削除（ファイルは残す） |
+
+---
+
+## 安全機構
+
+スクリプトが自動で行うガードです。
+
+1. **UUID 形式チェック** — 形式不正は `exit 2` で中止。
+2. **transcript の存在確認** — 見つからなければ `exit 4` で中止。
+3. **実行中セッションの保護** — `$CLAUDE_CODE_SESSION_ID` と一致したら `exit 3` で中止し、復帰コマンド（`claude -r <forkedFrom>`）を案内。
+4. **フォーク判定** — `forkedFrom` が無ければ大元の可能性として `exit 5` で中止。
+5. **稼働中ヒューリスティック** — transcript が直近 60 秒以内に更新されていれば警告（別ターミナルで稼働中の可能性）。
+6. **厳密一致での特定** — フル ID 完全一致、`sessionId` 厳密一致、全文ログはヘッダ行（`**セッションID**: <sid>`）で判定。本文に sid を含むだけの別ログは対象外。
+7. **索引のバックアップ** — 退避モードでは索引ファイルをバックアップしてから該当行を削除。
+
+---
+
+## ノートツール連携（任意）
+
+会話を自動記録するロギングフックを使っている場合、フォーク削除に連動してノート側の索引・全文ログも掃除します。
+
+- 場所は環境変数 `CLAUDE_SESSION_INDEX_VAULT` で指定（既定 `$HOME/Documents/vault-main`）。
+- フックを使っていない環境では、この部分は「（なし）」として自動的にスキップされます。設定は不要です。
+
+```bash
+export CLAUDE_SESSION_INDEX_VAULT="$HOME/path/to/your-vault"
+```
+
+---
+
+## 復元（退避モードの場合）
+
+`--purge` を付けずに削除した場合、対象は以下に退避されているだけです。
+
+```
+~/.claude/.trash/forks/<sid>_<日時>/
+```
+
+元のディレクトリ構造を保ったまま保存されているため、必要なら手動で戻せます。完全に消すには、この退避先を後から削除するか、最初から `--purge` を使います。
+
+---
+
+## トラブルシューティング
+
+| 症状 | 原因と対処 |
+|------|-----------|
+| `ERROR: セッション ID が UUID 形式ではありません` | sid の形式が不正。フル UUID を渡す。 |
+| `ERROR: 対象は現在実行中のセッションです` | 自分自身は削除不可。`claude -r <forkedFrom>` で元へ戻るか、別ターミナルから実行。 |
+| `WARNING: このセッションには forkedFrom がありません` | 大元セッションを指定している。フォークの sid を渡す。 |
+| `ERROR: transcript が見つかりません` | 既に削除済み、または sid 違い。 |
+| `WARNING: transcript が直近 60 秒以内に更新` | 別ターミナルで稼働中の可能性。停止してから実行。 |
+
+---
+
+## テスト
+
+`delete-fork.sh` を編集したとき、または Claude Code 側の transcript 仕様変更（`forkedFrom` の形式、`sessions/*.json` のキー、ログ・索引のヘッダ書式）が疑われるときは、回帰テストを実行します。
+
+```bash
+~/.claude/skills/cc-fork-delete/tests/run-tests.sh
+```
+
+- 隔離サンドボックス（偽 `$HOME` + 偽 Vault）で総当たり検証するため、**実データには一切触れません**。
+- 全パスで `exit 0`、1 つでも失敗すると `exit 1`。
+- 10 ケース / 47 アサーションをカバー（dry-run、dict 形式 `forkedFrom`、UUID 不正、大元保護、実行中保護、退避、完全削除、Vault 無し環境など）。詳細は `tests/README.md` を参照。
+
+---
+
+## 設計方針
+
+- **破壊的操作は必ず dry-run → 確認 → 実行の順で進める。** 無確認の `--apply` は行わない。
+- **Claude は進行役に徹する。** ID 確認・プレビュー提示・最終確認だけを担い、削除自体はスクリプトに委ねる。
+- **既定は復元可能な退避。** 完全削除はユーザーが明示的に希望したときだけ。

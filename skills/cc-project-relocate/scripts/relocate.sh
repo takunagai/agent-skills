@@ -79,7 +79,7 @@ info "── 計画 ────────────────────
 info "移動前パス : $OLD"
 info "移動後パス : $NEW"
 info "ログ元 dir : $SRC"
-info "ログ先 dir : $DEST"
+info "ログ先 dir : $DEST$([ -e "$DEST" ] && echo '  ← 既存（現行セッションのログ。移動後フォルダで起動していれば通常はこれ）' || echo '  ← 未作成（移動後フォルダで CC 未起動の稀なケース）')"
 info "config移行 : $([ $UPDATE_CONFIG -eq 1 ] && echo 'する' || echo 'しない')"
 info "モード     : $([ $DRY -eq 1 ] && echo 'dry-run（変更なし）' || echo '実行')"
 info "──────────────────────────────────────"
@@ -110,12 +110,13 @@ TS="$(date +%Y%m%d-%H%M%S)"
 
 migrate_logs() {
   if [ ! -e "$DEST" ]; then
-    info "[ログ] 移動先が無い → 単純リネーム"
+    info "[ログ] 移動先のログ dir が未作成（移動後フォルダで CC をまだ起動していない稀なケース）→ 単純リネーム"
     [ $DRY -eq 1 ] && return 0
     mv "$SRC" "$DEST"
     info "[ログ] 完了: $DEST"
   else
-    info "[ログ] 移動先が既存（新セッション作成済み等）→ マージ（移動先を優先・元はバックアップへ退避）"
+    info "[ログ] 移動先に現行セッションのログを検出 ─ 移動後フォルダで起動してこのスキルを使う通常ケース（＝これが標準動作）。"
+    info "[ログ] → 過去ログを移動先へマージ（現行セッション分は保持・同名は移動先優先・元 dir はバックアップへ退避）"
     local collisions=""
     collisions="$(cd "$SRC" && find . -type f 2>/dev/null | while IFS= read -r f; do [ -e "$DEST/$f" ] && echo "$f"; done)" || true
     if [ -n "$collisions" ]; then

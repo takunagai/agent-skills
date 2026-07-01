@@ -1,0 +1,4 @@
+interface:
+  display_name: "Image Gen Handoff"
+  short_description: "Build manifests for image generation batches."
+  default_prompt: "Use $image-gen-handoff to create a manifest and handoff note for this image generation batch."

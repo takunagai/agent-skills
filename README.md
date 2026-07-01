@@ -54,6 +54,7 @@ ln -s ~/Projects/agent-skills/skills/<name> ~/.agents/skills/<name>
 | gen-nanobanana-images | Google Gemini の画像生成モデル Nano Banana シリーズ（Flash / Flash2 / Pro）で、テキストからの画像生成・画像編集・スタイルリファレンス・マルチターン反復修正を行う。要 `GEMINI_API_KEY` | [docs/gen-nanobanana-images.md](docs/gen-nanobanana-images.md) |
 | gen-infographic | 日本語の文章・メモ・PDF・スクショなどを 1 枚の読みやすい図解画像へ変換。構造（流れ図・対比・循環・一覧）とスタイル（手描き／ミニマル／水彩／設計図風）を独立に組合せ | [docs/gen-infographic.md](docs/gen-infographic.md) |
 | gen-lifestyle-images | 商品のライフスタイル写真を一括生成。ブランド・商品カタログ・シーンをプリセット管理し、セミオート（プラン提示→承認→生成）で量産。要 `GEMINI_API_KEY` | [docs/gen-lifestyle-images.md](docs/gen-lifestyle-images.md) |
+| image-gen-handoff | Codex `image_gen` / Image 2.0 の大量生成後に、保存済み画像と session JSONL から最終生成プロンプト・sha256・寸法・欠損・重複を manifest 化し、軽量な引き継ぎノートを作成 | [docs/image-gen-handoff.md](docs/image-gen-handoff.md) |
 | git-workflow | Git ワークフロー支援。Conventional Commits（日本語 subject）でのメッセージ生成・コミット前チェック（機密情報/デバッグコード等）・ブランチ命名規則・マージ戦略ガイド | [docs/git-workflow.md](docs/git-workflow.md) |
 | obsidian-vault-create | 新しい Obsidian Vault を標準レイアウトで作成。`YYYY-MM-DD-Project` 命名・数値プレフィックスのフォルダ・README/Home・任意で `.obsidian` 設定コピー。`~/Documents` 既定 | [docs/obsidian-vault-create.md](docs/obsidian-vault-create.md) |
 | refund-request | 返金・キャンセル請求メールを、相手企業のポリシー調査の上で交渉力のある文面に。英語・日本語対応、送信前チェックリスト＋4 段階フォローアップ戦略つき | [docs/refund-request.md](docs/refund-request.md) |

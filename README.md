@@ -72,6 +72,7 @@ ln -s ~/Projects/agent-skills/agents/<name>.md ~/.claude/agents/<name>.md
 | deploy-astro-cloudflare | Astro + `@astrojs/cloudflare` 構成専用。Workers Builds（GitHub 連携）とローカル `wrangler deploy` の 2 モードに対応 | [docs/deploy-astro-cloudflare.md](docs/deploy-astro-cloudflare.md) |
 | cloudflare-lesson-note | 学習セッションの内容を技術ブログ品質の Obsidian ノートに整形・保存。保存先は `$LESSON_VAULT_PATH` で指定、特定 Vault に非依存 | [docs/cloudflare-lesson-note.md](docs/cloudflare-lesson-note.md) |
 | print-card-comp | 印刷物（名刺・しおり・ポストカード・DL カード等）の表裏デザインカンプを依頼内容から一括生成。QR 生成（segno）・PIL 合成（文字化けなし）・入稿指示書まで。背景は gen-nanobanana-images / gpt-image-2 を委譲利用 | [docs/print-card-comp.md](docs/print-card-comp.md) |
+| mac-gui-router | Mac の GUI 操作・スクショ依頼の方式判定ルーター。公式 computer-use / 自作ループ（screencapture + CGEvent）/ chrome-devtools から最適を選び、操作 = 公式・撮影 = 自作のハイブリッド（操作マニュアル作成）にも対応。要ヘルパー 3 種（付属手順でビルド） | [docs/mac-gui-router.md](docs/mac-gui-router.md) |
 
 ## サブエージェント一覧
 

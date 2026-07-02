@@ -9,10 +9,10 @@
 このリポジトリを clone し、スキル本体（`skills/obsidian-vault-create`）を各エージェントのスキルディレクトリへ **symlink** します。
 
 ```bash
-git clone git@github.com:takunagai/agent-skills.git ~/Projects/agent-skills
+git clone git@github.com:takunagai/agent-assets.git ~/Projects/agent-assets
 
 # ハブ（~/.agents）から実体へ絶対 symlink
-ln -s /Users/$USER/Projects/agent-skills/skills/obsidian-vault-create ~/.agents/skills/obsidian-vault-create
+ln -s /Users/$USER/Projects/agent-assets/skills/obsidian-vault-create ~/.agents/skills/obsidian-vault-create
 
 # Claude Code 用に ~/.agents への相対 symlink
 ln -s ../../.agents/skills/obsidian-vault-create ~/.claude/skills/obsidian-vault-create

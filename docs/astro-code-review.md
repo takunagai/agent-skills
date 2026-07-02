@@ -24,10 +24,10 @@
 
 ```bash
 # 1) リポジトリを取得
-git clone git@github.com:takunagai/agent-skills.git ~/Projects/agent-skills
+git clone git@github.com:takunagai/agent-assets.git ~/Projects/agent-assets
 
 # 2) ハブ（~/.agents）から実体へ絶対 symlink
-ln -s /Users/$USER/Projects/agent-skills/skills/astro-code-review ~/.agents/skills/astro-code-review
+ln -s /Users/$USER/Projects/agent-assets/skills/astro-code-review ~/.agents/skills/astro-code-review
 
 # 3) Claude Code 用に ~/.agents への相対 symlink
 ln -s ../../.agents/skills/astro-code-review ~/.claude/skills/astro-code-review

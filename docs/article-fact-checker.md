@@ -27,8 +27,8 @@
 このリポジトリを clone し、エージェント本体（`agents/article-fact-checker.md`）を `~/.claude/agents/` へ symlink します。実体は 1 つ、参照を張る方式です（スキルと同じ運用。ただしサブエージェントは Claude Code 固有のため、`~/.agents` を経由せず直接リンクします）。
 
 ```bash
-git clone git@github.com:takunagai/agent-skills.git ~/Projects/agent-skills
-ln -s ~/Projects/agent-skills/agents/article-fact-checker.md ~/.claude/agents/article-fact-checker.md
+git clone git@github.com:takunagai/agent-assets.git ~/Projects/agent-assets
+ln -s ~/Projects/agent-assets/agents/article-fact-checker.md ~/.claude/agents/article-fact-checker.md
 ```
 
 プロジェクト単位で使う場合は `<repo>/.claude/agents/` へ同様に symlink します。

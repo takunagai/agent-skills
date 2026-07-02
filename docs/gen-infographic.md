@@ -12,10 +12,10 @@
 
 ```bash
 # 1) リポジトリを取得
-git clone git@github.com:takunagai/agent-skills.git ~/Projects/agent-skills
+git clone git@github.com:takunagai/agent-assets.git ~/Projects/agent-assets
 
 # 2) ハブ（~/.agents）から実体へ絶対 symlink
-ln -s /Users/$USER/Projects/agent-skills/skills/gen-infographic ~/.agents/skills/gen-infographic
+ln -s /Users/$USER/Projects/agent-assets/skills/gen-infographic ~/.agents/skills/gen-infographic
 
 # 3) Claude Code 用に ~/.agents への相対 symlink
 ln -s ../../.agents/skills/gen-infographic ~/.claude/skills/gen-infographic

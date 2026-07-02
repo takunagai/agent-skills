@@ -23,8 +23,8 @@
 このリポジトリを clone し、スキル本体（`skills/deploy-cloudflare`）を各エージェントのスキルディレクトリへ symlink します。実体は 1 つ、参照を複数張る方式です。当環境では「実体 → `~/.agents` → `~/.claude`」の 2 段 symlink で統一しています。
 
 ```bash
-git clone git@github.com:takunagai/agent-skills.git ~/Projects/agent-skills
-ln -s /Users/$USER/Projects/agent-skills/skills/deploy-cloudflare ~/.agents/skills/deploy-cloudflare
+git clone git@github.com:takunagai/agent-assets.git ~/Projects/agent-assets
+ln -s /Users/$USER/Projects/agent-assets/skills/deploy-cloudflare ~/.agents/skills/deploy-cloudflare
 ln -s ../../.agents/skills/deploy-cloudflare ~/.claude/skills/deploy-cloudflare
 ```
 

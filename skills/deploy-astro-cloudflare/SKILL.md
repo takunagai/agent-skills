@@ -12,7 +12,7 @@ Workers Builds（GitHub連携による自動デプロイ）とローカルデプ
 
 > [!note] 適用範囲
 > **このスキルは Astro + `@astrojs/cloudflare` 構成専用**。`astro build && wrangler deploy` を前提とする。
-> Next.js + OpenNext 構成のデプロイは別スキル `deploy-cloudflare` を使うこと（こちらは `@opennextjs/cloudflare` を前提とし、設定・ビルド成果物が異なる）。
+> Next.js + OpenNext 構成のデプロイは別スキル `deploy-nextjs-cloudflare` を使うこと（こちらは `@opennextjs/cloudflare` を前提とし、設定・ビルド成果物が異なる）。
 
 ## 技術スタック
 

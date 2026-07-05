@@ -1,5 +1,5 @@
 ---
-name: deploy-cloudflare
+name: deploy-nextjs-cloudflare
 description: "Next.js + OpenNext 構成専用の Cloudflare Workers 本番/プレビューデプロイスキル。未コミット変更の処理、ビルド確認、プッシュ、OpenNext + Wrangler によるデプロイを自動実行。『Next.js をデプロイして』『本番に反映』『Cloudflareにデプロイ』『プレビューにデプロイ』などのリクエストで発動。Astro 構成のデプロイには deploy-astro-cloudflare を使用する。"
 ---
 
@@ -16,9 +16,9 @@ Next.js アプリケーションを OpenNext 経由で Cloudflare Workers にデ
 
 ## 使い方
 
-- `/deploy-cloudflare` or `/deploy-cloudflare production` → 本番環境にデプロイ（デフォルト）
-- `/deploy-cloudflare preview` → プレビュー環境にデプロイ
-- `/deploy-cloudflare --skip-build` → ビルドチェックを省略（緊急時のみ）
+- `/deploy-nextjs-cloudflare` or `/deploy-nextjs-cloudflare production` → 本番環境にデプロイ（デフォルト）
+- `/deploy-nextjs-cloudflare preview` → プレビュー環境にデプロイ
+- `/deploy-nextjs-cloudflare --skip-build` → ビルドチェックを省略（緊急時のみ）
 
 ## ワークフロー
 

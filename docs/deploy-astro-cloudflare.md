@@ -14,7 +14,7 @@
 | デプロイツール | wrangler（`wrangler.jsonc` で設定） |
 | CI/CD | Workers Builds（Cloudflare の GitHub 連携） |
 
-> **注意**: Next.js + OpenNext 構成のデプロイには別スキル `deploy-cloudflare` を使ってください（末尾の使い分け表を参照）。
+> **注意**: Next.js + OpenNext 構成のデプロイには別スキル `deploy-nextjs-cloudflare` を使ってください（末尾の使い分け表を参照）。
 
 ---
 
@@ -142,18 +142,18 @@ const apiKey = Astro.locals.runtime.env.API_KEY;
 
 ---
 
-## deploy-cloudflare との使い分け
+## deploy-nextjs-cloudflare との使い分け
 
 同じリポジトリに、Cloudflare Workers へデプロイするスキルが 2 つあります。対象フレームワーク・ビルド成果物が異なるため、構成に合わせて選びます。
 
-| | deploy-astro-cloudflare（本スキル） | deploy-cloudflare |
+| | deploy-astro-cloudflare（本スキル） | deploy-nextjs-cloudflare |
 |---|---|---|
 | 対象 | Astro | Next.js |
 | アダプター / ビルダ | `@astrojs/cloudflare` | `@opennextjs/cloudflare`（OpenNext） |
 | ビルドコマンド | `astro build && wrangler deploy` | OpenNext ビルド + `wrangler deploy` |
 | こういうとき | `astro.config.*` に Astro 設定があり `@astrojs/cloudflare` を使っている | `next.config.*` があり OpenNext で Cloudflare 化している |
 
-「デプロイして」のような曖昧な指示ではトリガー語が衝突しうるので、Astro 構成では本スキルを、Next.js 構成では `deploy-cloudflare` を明示的に選んでください。
+「デプロイして」のような曖昧な指示ではトリガー語が衝突しうるので、Astro 構成では本スキルを、Next.js 構成では `deploy-nextjs-cloudflare` を明示的に選んでください。
 
 ---
 

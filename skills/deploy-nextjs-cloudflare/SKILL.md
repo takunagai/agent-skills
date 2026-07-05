@@ -1,131 +1,110 @@
 ---
 name: deploy-nextjs-cloudflare
-description: "Next.js + OpenNext 構成専用の Cloudflare Workers 本番/プレビューデプロイスキル。未コミット変更の処理、ビルド確認、プッシュ、OpenNext + Wrangler によるデプロイを自動実行。『Next.js をデプロイして』『本番に反映』『Cloudflareにデプロイ』『プレビューにデプロイ』などのリクエストで発動。Astro 構成のデプロイには deploy-astro-cloudflare を使用する。"
+description: "Next.js + OpenNext 構成専用の Cloudflare Workers デプロイスキル。OpenNext 公式 CLI（opennextjs-cloudflare deploy / upload）で本番デプロイと Preview URL 発行を自動実行。未コミット変更の処理、ビルド確認、プッシュ、フレームワーク検出・認証確認などのプリフライトを含む。『Next.js をデプロイして』『本番に反映』『Cloudflareにデプロイ』『プレビューにデプロイ』などのリクエストで発動。Astro 構成のデプロイには deploy-astro-cloudflare を使用する。"
 ---
 
 # Cloudflare デプロイ Skill（Next.js + OpenNext 構成専用）
 
-> **適用範囲**: このスキルは **Next.js + OpenNext（`@opennextjs/cloudflare`）構成専用**です。
+> [!note] 適用範囲
+> このスキルは **Next.js + OpenNext（`@opennextjs/cloudflare`）構成専用**です。
 > Astro 構成のデプロイには別スキル **deploy-astro-cloudflare** を使用してください。
-> 両者ともトリガー語が近いため、対象プロジェクトのフレームワークを必ず確認してから実行します。
+> 両者ともトリガー語が近いため、**実行前に対象プロジェクトの `package.json` を確認**すること。
+> `dependencies` / `devDependencies` に `@opennextjs/cloudflare` があれば本スキル、`astro` が見つかれば deploy-astro-cloudflare に切り替える（`scripts/deploy.sh` はこの判定を自動で行う）。
 
 ## 概要
 
-Next.js アプリケーションを OpenNext 経由で Cloudflare Workers にデプロイする。
-本番環境（production）とプレビュー環境（preview）に対応。
+Next.js アプリケーションを OpenNext 公式 CLI 経由で Cloudflare Workers にデプロイする。
+
+- **production**: `opennextjs-cloudflare deploy` ─ リモートキャッシュ投入 → `wrangler deploy` で即時本番反映
+- **preview**: `opennextjs-cloudflare upload` ─ リモートキャッシュ投入 → `wrangler versions upload` で Preview URL を発行（トラフィックには乗らない。固定エイリアスは `--preview-alias`）
 
 ## 使い方
 
 - `/deploy-nextjs-cloudflare` or `/deploy-nextjs-cloudflare production` → 本番環境にデプロイ（デフォルト）
-- `/deploy-nextjs-cloudflare preview` → プレビュー環境にデプロイ
-- `/deploy-nextjs-cloudflare --skip-build` → ビルドチェックを省略（緊急時のみ）
+- `/deploy-nextjs-cloudflare preview` → プレビュー環境にデプロイ（Preview URL 発行）
+- `/deploy-nextjs-cloudflare production --skip-build` → ビルドチェックを省略（緊急時のみ）
+- `/deploy-nextjs-cloudflare production --allow-branch` → main/master 以外のブランチからの本番デプロイを許可
 
-## ワークフロー
+## 実行方法
 
-```
-1. 状態確認    → 未コミット変更・未プッシュコミットを確認
-2. コミット    → 未コミット変更があれば /commit スキルでコミット
-3. ビルド確認  → npm run build で事前ビルドチェック（--skip-build で省略可）
-4. プッシュ    → git push origin main でリモートに反映
-5. デプロイ    → npm run deploy:production or deploy:preview を実行
-6. 確認       → ブラウザで本番サイトの動作を目視確認
-```
-
-## 各ステップの詳細
-
-### Step 1: 状態確認
+Claude は `scripts/deploy.sh` を正式なエントリポイントとして実行する。
 
 ```bash
-git status                          # 未コミットの変更を確認
-git log --oneline origin/main..HEAD # 未プッシュのコミット数を確認
+bash <スキルパス>/scripts/deploy.sh <production|preview> [--skip-build] [--allow-branch]
 ```
 
-### Step 2: コミット
+- タイムアウトは **600000ms（10 分）** を指定する
+- スクリプトはプリフライト（Git リポジトリ確認・フレームワーク検出・パッケージマネージャ検出・デプロイスクリプト検出・wrangler 認証確認・ブランチ確認）を通過してからビルド・デプロイに進む
+- プリフライトが失敗した場合はエラーメッセージの指示に従う（「エラー対応」節を参照）
+- 未コミット変更でスクリプトが止まった場合は `/commit` スキルでコミットしてから再実行する
 
-未コミットの変更がある場合、`/commit` スキルを呼び出してコミットする。
-変更がなければスキップ。
+## 前提条件
 
-### Step 3: ビルド確認
+- `package.json` に公式推奨のスクリプトが定義されていること
+
+  ```json
+  {
+    "scripts": {
+      "build": "next build",
+      "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+      "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+      "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload"
+    }
+  }
+  ```
+
+- **`wrangler.jsonc`**（公式推奨。`wrangler.toml` も後方互換で動作するが、新機能は jsonc 限定で提供される）
+- `wrangler login` 済み（`npx wrangler whoami` で確認できる）
+- R2 バケット作成・`open-next.config.ts` などの初期セットアップは `references/setup-checklist.md` を参照
+- **旧 I/F（`deploy:production` / `deploy:preview` + `wrangler deploy --env`）のプロジェクトを検出した場合**、`scripts/deploy.sh` はフォールバックで動作を続けるが、新形式（`deploy` / `upload`）への package.json 更新を提案する（手順は `references/setup-checklist.md` を参照）
+
+## バージョン方針
+
+**常に最新版を採用する。** 実行前に以下で latest を確認し、対象プロジェクトの依存が古ければアップデートを提案する。
 
 ```bash
-npm run build
+npm view next version
+npm view @opennextjs/cloudflare version
 ```
 
-ビルドが失敗した場合はデプロイを中止し、エラーを報告する。
-`--skip-build` オプションが指定されている場合はスキップ。
+| パッケージ | 2026-07-05 確認時点の latest | 備考 |
+|---|---|---|
+| `next` | 16.2.10 | 16.3 系は canary/preview 段階 |
+| `@opennextjs/cloudflare` | 1.20.1 | peerDependencies: `next ">=15.5.18 <16 \|\| >=16.2.6"` / `wrangler ^4.86.0` |
 
-### Step 4: プッシュ
+Next 16 系を使う場合は **16.2.6 以上が peer 要件で必須**。
 
-```bash
-git push origin main
-```
+## OpenNext 互換性（proxy.ts / Node Middleware）
 
-未プッシュコミットがない場合はスキップ。
+- issue #1082 は **closed（2026-04-09、SWR 対応完了が理由）だが、proxy.ts 問題自体は未解決**。「#1082 が閉じた = 解決済み」と読むのは誤り
+- 正しい追跡先: [opennextjs/adapters-api#20](https://github.com/opennextjs/adapters-api/issues/20)（open）、[opennextjs-cloudflare#1277](https://github.com/opennextjs/opennextjs-cloudflare/issues/1277)（open）
+- 回避策（2026-06-18 時点のコメントでも依然必要）: `proxy.ts` → `middleware.ts` にリネームし、`export proxy` → `export middleware` に変更
+- `middleware.ts` はビルド時に非推奨警告が出るが、メンテナ（conico974、2026-04-28）により **Next 17 まではサポート継続**と明言されている
+- 根本原因: Next.js の `proxy.ts` は Node Middleware（Next 15.2 導入）扱いで、OpenNext は Node Middleware 自体を未対応
+- 解消条件: adapters-api#20 のクローズ後に再確認する
 
-### Step 5: デプロイ実行
+## デプロイ後の確認とロールバック
 
-```bash
-# 本番環境
-npm run deploy:production
-# → opennextjs-cloudflare build && wrangler deploy --env production
-
-# プレビュー環境
-npm run deploy:preview
-# → opennextjs-cloudflare build && wrangler deploy --env preview
-```
-
-### Step 6: 確認
-
-ブラウザツールが利用可能な場合：
-- 本番サイト（デプロイログに表示された本番 URL、または `wrangler.toml` の routes で設定したドメイン）にアクセスして変更を確認
-- 主要な変更点をページ上で検索・確認
-
-ブラウザツールが利用できない場合：
-- デプロイログの成功メッセージを確認
-- ユーザーに手動確認を依頼
-
-## 環境設定
-
-| 環境 | コマンド | URL |
-|------|---------|-----|
-| production | `npm run deploy:production` | `wrangler.toml` の routes で設定したドメイン（デプロイログに表示） |
-| preview | `npm run deploy:preview` | プレビューURL（デプロイログに表示） |
-
-### プロジェクトルート・本番 URL の指定（環境変数）
-
-`scripts/deploy.sh` は以下の環境変数で挙動を上書きできる（いずれも未指定で動作する）。
-
-| 環境変数 | 説明 | デフォルト |
-|----------|------|-----------|
-| `DEPLOY_PROJECT_DIR` | デプロイ対象プロジェクトのルートディレクトリ | 実行時のカレントディレクトリ |
-| `PRODUCTION_URL` | 完了時に表示する本番サイト URL（任意） | 空（`wrangler.toml` の routes を参照） |
+- ブラウザで本番 / プレビュー URL にアクセスし、主要な変更点を確認する
+- `npx wrangler deployments list` / `npx wrangler versions list` ─ 直近 100 件の履歴を確認
+- `npx wrangler rollback` ─ 指定バージョンへ即時ロールバック（**KV / R2 / D1 / DO のデータは戻らない**点に注意）
+- `npx wrangler tail` ─ リアルタイムログを確認
+- 詳細・制約は `references/troubleshooting.md` を参照
 
 ## エラー対応
 
 | エラー | 対応 |
 |--------|------|
+| `wrangler whoami` 失敗（認証切れ） | `wrangler login` を実行 |
+| フレームワーク不一致（`astro` を検出） | deploy-astro-cloudflare スキルを使用 |
+| デプロイスクリプト未定義 | package.json に `deploy` / `upload` スクリプトを追加（前提条件・`references/setup-checklist.md` を参照） |
 | ビルド失敗 | エラー内容を確認し修正。`/error-diagnostic` を活用 |
 | プッシュ失敗 | リモートとの差分を確認。`git pull --rebase` を検討 |
-| デプロイ失敗 | wrangler のログを確認。認証切れの場合は `wrangler login` |
-| アセットアップロード遅延 | タイムアウトを延長して再試行 |
-| OpenNext バンドル生成失敗（`server/middleware.js does not exist`） | 下記「OpenNext 互換性」セクション参照 |
-
-## OpenNext 互換性
-
-Next.js のメジャーアップグレード後は、OpenNext との互換性を事前に確認すること。
-
-### proxy.ts 非対応問題（2026-02 時点）
-
-- **状況**: `@opennextjs/cloudflare` は Next.js 16 の `proxy.ts`（旧 `middleware.ts`）を未サポート
-- **エラー**: `File server/middleware.js does not exist`（バンドル生成時）
-- **原因**: OpenNext が Adapters API 未実装のため、Node.js ランタイムの proxy.ts を処理できない
-- **回避策**: `proxy.ts` → `middleware.ts` にリネームし、`export proxy` → `export middleware` に変更
-- **追跡**: [opennextjs/opennextjs-cloudflare#1082](https://github.com/opennextjs/opennextjs-cloudflare/issues/1082)
-- **解消条件**: OpenNext が Adapters API を実装し次第、`proxy.ts` に再移行可能。解消後はこのセクションを削除
+| その他（Worker サイズ超過・キャッシュ投入失敗・ISR 不安定 等） | `references/troubleshooting.md` を参照 |
 
 ## 注意事項
 
-- デプロイコマンドは内部で再ビルドするため、Step 3 のビルドは事前チェック目的
-- `wrangler.toml` の `assets.exclude` 警告は既知の問題（動作に影響なし）
-- `duplicate key "options"` 警告は floating-ui のバンドル警告（動作に影響なし）
-- デプロイのタイムアウトは 10 分（600000ms）に設定すること
+- `wrangler.jsonc` に `keep_vars: true` を設定する（デプロイでダッシュボード側の環境変数が消えるのを防ぐ。deploy-astro-cloudflare と同趣旨）
+- 機密情報は `vars` に書かず `wrangler secret put` で登録する。`.dev.vars` はコミット禁止
+- 既知の無害警告: `assets.exclude`、`duplicate key "options"`（floating-ui 由来）
+- デプロイのタイムアウトは 600000ms（10 分）に設定すること

@@ -152,7 +152,7 @@ TRASH="$HOME/.claude/.trash/forks/${SID}_${TS}"
 [ $PURGE -eq 0 ] && mkdir -p "$TRASH"
 
 relpath() {  # $1=絶対パス → 退避先の相対構造
-  local p="$1" rel="${1#$HOME/}"
+  local p="$1" rel="${1#"$HOME"/}"
   if [ "$rel" = "$p" ]; then rel="external/$(printf '%s' "$p" | sed 's#^/##; s#/#_#g')"; fi
   printf '%s' "$rel"
 }
@@ -161,7 +161,8 @@ move_or_rm() {  # $1=path
   if [ $PURGE -eq 1 ]; then
     rm -rf -- "$p"
   else
-    local dest="$TRASH/$(relpath "$p")"
+    local dest
+    dest="$TRASH/$(relpath "$p")"
     mkdir -p "$(dirname "$dest")"
     mv -- "$p" "$dest"
   fi

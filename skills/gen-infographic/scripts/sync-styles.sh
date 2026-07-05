@@ -15,7 +15,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 STYLES="$SKILL_DIR/references/styles"
-SHARED="$SKILL_DIR/references/../../_image-styles"   # 正本（共有ライブラリ）
 
 mode="${1:---embed}"
 

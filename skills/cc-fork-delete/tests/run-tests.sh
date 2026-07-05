@@ -1,6 +1,9 @@
 #!/bin/bash
 # cc-fork-delete スキルの delete-fork.sh を、隔離サンドボックス($HOME偽装)で総当たり検証する。
 # 実データは一切触らない。各ケースごとに使い捨ての SANDBOX を作る。
+# check() は第 2 引数を eval する。OUT は eval 文字列内で参照されるため、
+# 静的解析では未使用に見える（偽陽性）。ファイル全体で SC2034 を抑制する。
+# shellcheck disable=SC2034
 set -uo pipefail
 
 # スクリプト自己位置基準で解決（symlink 経由・clone 先・~/.agents 経由のいずれでも動く）

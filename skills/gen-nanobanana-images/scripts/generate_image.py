@@ -39,19 +39,12 @@ ASPECT_RATIOS_BASE = (
 )
 ASPECT_RATIOS_EXTENDED = ("1:4", "4:1", "1:8", "8:1")  # flash2 のみ
 
+# モデルは 2026-05-28 GA 版の 3 構成（flash2 / pro / lite）。
+# 旧 flash (2.5 系) と preview ID は廃止済み（2026-06-25 shutdown）のため使用しない。
+# 廃止経緯の詳細は references/api-reference.md「旧モデル（廃止）」を参照。
 MODEL_SPECS: dict = {
-    "flash": ModelSpec(
-        id="gemini-2.5-flash-image",
-        thinking_levels=("minimal", "low", "medium", "high"),
-        aspect_ratios=ASPECT_RATIOS_BASE,
-        image_sizes=(),
-        max_input_images=1,
-        supports_multi_turn=False,
-        supports_google_search=False,
-        supports_image_search=False,
-    ),
     "flash2": ModelSpec(
-        id="gemini-3.1-flash-image-preview",
+        id="gemini-3.1-flash-image",
         thinking_levels=("minimal", "high"),
         aspect_ratios=ASPECT_RATIOS_BASE + ASPECT_RATIOS_EXTENDED,
         image_sizes=("512px", "1K", "2K", "4K"),
@@ -61,7 +54,7 @@ MODEL_SPECS: dict = {
         supports_image_search=True,
     ),
     "pro": ModelSpec(
-        id="gemini-3-pro-image-preview",
+        id="gemini-3-pro-image",
         thinking_levels=("low", "high"),
         aspect_ratios=ASPECT_RATIOS_BASE,
         image_sizes=("1K", "2K", "4K"),
@@ -70,14 +63,27 @@ MODEL_SPECS: dict = {
         supports_google_search=True,
         supports_image_search=False,
     ),
+    "lite": ModelSpec(
+        id="gemini-3.1-flash-lite-image",
+        thinking_levels=("minimal", "high"),
+        aspect_ratios=ASPECT_RATIOS_BASE,
+        image_sizes=("1K",),
+        max_input_images=14,
+        supports_multi_turn=True,
+        supports_google_search=False,
+        supports_image_search=False,
+    ),
 }
 
 # ヘルプ表示・argparse 用の集約値
 ALL_ASPECT_RATIOS = ASPECT_RATIOS_BASE + ASPECT_RATIOS_EXTENDED
 ALL_IMAGE_SIZES = ("512px", "1K", "2K", "4K")
+MODEL_CHOICES = list(MODEL_SPECS.keys())
 
-# デフォルトの Negative Constraints（品質担保用）
-NEGATIVE_CONSTRAINTS = "Avoid: low quality, blurry, noisy, deformed hands, watermark, text artifacts, oversaturated colors."
+# Negative Constraints は既定 OFF（空文字）。付加したい場合は config.json の
+# "negative_constraints" キーに文字列を設定する（opt-in）。以下は設定例:
+#   "negative_constraints": "Avoid: low quality, blurry, noisy, deformed hands,
+#                            watermark, oversaturated colors."
 
 MAX_FILE_SIZE_MB = 7
 MAX_RETRIES = 3
@@ -98,6 +104,7 @@ MIME_MAP = {
 }
 
 # ユーザーが config.json で変更可能なデフォルト値
+# negative_constraints は既定 OFF（空文字）。config.json で opt-in する。
 CONFIGURABLE_DEFAULTS = {
     "model": "flash2",
     "aspect_ratio": "1:1",
@@ -105,7 +112,7 @@ CONFIGURABLE_DEFAULTS = {
     "num_images": DEFAULT_NUM_IMAGES,
     "timeout": 120,
     "thinking_level": None,
-    "negative_constraints": NEGATIVE_CONSTRAINTS,
+    "negative_constraints": "",
 }
 
 
@@ -177,8 +184,8 @@ def parse_args(config=None):
   # 同一プロンプトで3枚のバリエーションを生成
   %(prog)s -p "A red apple on white background" -N 3
 
-  # 旧 Flash モデルで高速生成
-  %(prog)s -p "Quick draft sketch" -m flash
+  # Lite モデルで最速・最安のドラフト生成（1K 専用）
+  %(prog)s -p "Quick draft sketch" -m lite
 """,
     )
 
@@ -194,8 +201,12 @@ def parse_args(config=None):
         "-m",
         "--model",
         default=defaults["model"],
-        choices=["flash", "flash2", "pro"],
-        help=f"モデル選択: flash (旧版), flash2 (推奨), pro (高品質) (default: {defaults['model']})",
+        choices=MODEL_CHOICES,
+        help=(
+            f"モデル選択: flash2 (推奨・万能), pro (最高品質・テキスト精度最高), "
+            f"lite (最速最安・1K専用・ドラフト/大量生成向け) (default: {defaults['model']}). "
+            f"旧 flash (2.5) は廃止。ドラフト用途は lite を使用"
+        ),
     )
     parser.add_argument(
         "-i", "--input-image", nargs="+", default=None,
@@ -223,13 +234,13 @@ def parse_args(config=None):
         "--image-size",
         default=None,
         choices=list(ALL_IMAGE_SIZES),
-        help="解像度 (flash2: 512px/1K/2K/4K, pro: 1K/2K/4K)",
+        help="解像度 (flash2: 512px/1K/2K/4K, pro: 1K/2K/4K, lite: 1K のみ)",
     )
     parser.add_argument(
         "-t",
         "--thinking-level",
         default=defaults["thinking_level"],
-        help="思考レベル (flash: minimal/low/medium/high, flash2: minimal/high, pro: low/high)",
+        help="思考レベル (flash2: minimal/high, pro: low/high, lite: minimal/high)",
     )
     parser.add_argument(
         "-g",
@@ -276,6 +287,24 @@ def _validate_image_file(path_str):
     if size_mb > MAX_FILE_SIZE_MB:
         return f"画像ファイルが大きすぎます: {path_str} ({size_mb:.1f}MB, 上限: {MAX_FILE_SIZE_MB}MB)"
     return None
+
+
+def _unique_output_path(out_path):
+    """出力先に同名ファイルがあれば連番を振って回避する。
+
+    Returns:
+        tuple: (Path, renamed: bool) — renamed が True なら連番回避したことを示す。
+    """
+    p = Path(out_path)
+    if not p.exists():
+        return p, False
+    stem, suffix, parent = p.stem, p.suffix, p.parent
+    i = 2
+    while True:
+        candidate = parent / f"{stem}_{i}{suffix}"
+        if not candidate.exists():
+            return candidate, True
+        i += 1
 
 
 def _augment_prompt(prompt, has_input, has_reference, input_count=0, ref_count=0):
@@ -352,6 +381,18 @@ def validate_args(args):
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Image Search は typed SearchTypes を持つ SDK が必須（v1.65.0+、推奨 v2.10.0+）
+    if args.image_search:
+        from google.genai import types
+        if not hasattr(types, "SearchTypes"):
+            print(
+                "Error: --image-search には新しい google-genai SDK が必要です"
+                "（types.SearchTypes 未対応）。\n"
+                "  次を実行してください: pip install -U 'google-genai>=2.10.0'",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     # 思考レベルのバリデーション
     if args.thinking_level:
@@ -478,26 +519,18 @@ def build_config(args):
     # Google Search / Image Search 連携
     if args.google_search or args.image_search:
         if args.image_search:
-            # Image Search (± Web Search) — flash2 専用
-            try:
-                search_types_params = {}
-                if args.google_search:
-                    search_types_params["webSearch"] = types.WebSearch()
-                search_types_params["imageSearch"] = types.ImageSearch()
-                config_params["tools"] = [
-                    types.Tool(googleSearch=types.GoogleSearch(
-                        searchTypes=types.SearchTypes(**search_types_params)
-                    ))
-                ]
-            except (AttributeError, TypeError):
-                # SDK が typed SearchTypes 未対応の場合は raw dict にフォールバック
-                search_types = {}
-                if args.google_search:
-                    search_types["web_search"] = {}
-                search_types["image_search"] = {}
-                config_params["tools"] = [
-                    {"google_search": {"search_types": search_types}}
-                ]
+            # Image Search (± Web Search) — flash2 専用。
+            # typed SearchTypes は SDK v1.65.0+（推奨 v2.10.0+）が必須。
+            # 対応可否は validate_args() で事前チェック済み。
+            search_types_params = {}
+            if args.google_search:
+                search_types_params["webSearch"] = types.WebSearch()
+            search_types_params["imageSearch"] = types.ImageSearch()
+            config_params["tools"] = [
+                types.Tool(googleSearch=types.GoogleSearch(
+                    searchTypes=types.SearchTypes(**search_types_params)
+                ))
+            ]
         else:
             # Web Search のみ（既存動作を維持）
             config_params["tools"] = [types.Tool(googleSearch=types.GoogleSearch())]
@@ -562,7 +595,7 @@ def save_session(session_path, session_data):
         json.dump(session_data, f, indent=2, ensure_ascii=False)
 
 
-def rebuild_history_contents(session_data, new_prompt, negative_constraints=NEGATIVE_CONSTRAINTS):
+def rebuild_history_contents(session_data, new_prompt, negative_constraints=""):
     """セッション履歴から contents を再構築する。"""
     from google.genai import types
 
@@ -573,11 +606,10 @@ def rebuild_history_contents(session_data, new_prompt, negative_constraints=NEGA
         for part_data in entry.get("parts", []):
             if "text" in part_data:
                 parts.append(types.Part.from_text(text=part_data["text"]))
-            elif "thought_signature" in part_data:
-                # thought_signature を Part として再構築
-                parts.append(
-                    types.Part(thoughtSignature=part_data["thought_signature"])
-                )
+            elif "thought_signature_b64" in part_data:
+                # base64 文字列で保存された thought_signature を bytes に戻して再構築
+                sig_bytes = base64.b64decode(part_data["thought_signature_b64"])
+                parts.append(types.Part(thoughtSignature=sig_bytes))
             elif "image_file" in part_data:
                 # 保存済み画像を読み込んで Part に変換
                 img_path = Path(part_data["image_file"])
@@ -663,6 +695,10 @@ def extract_and_save_images(response, output_dir, output_name, turn_num=0, call_
                     filename = f"nanobanana_{timestamp}{variant_suffix}_{img_count}.png"
 
             out_path = Path(output_dir) / filename
+            # 既存ファイルの黙殺上書きを防ぐ（連番で回避）
+            out_path, renamed = _unique_output_path(out_path)
+            if renamed:
+                print(f"Note: 同名ファイルが存在するため {out_path.name} に保存します（上書き回避）。")
 
             # PIL で画像を保存
             try:
@@ -692,8 +728,26 @@ def extract_and_save_images(response, output_dir, output_name, turn_num=0, call_
     return saved_paths, thought_signatures, text_parts
 
 
-def api_call_with_retry(client, model_id, contents, config, timeout):
-    """API 呼び出しをリトライ付きで実行する。"""
+def make_client(api_key, timeout):
+    """タイムアウト（秒）を反映した Gemini クライアントを生成する。
+
+    SDK の HttpOptions.timeout はミリ秒単位のため *1000 して渡す。
+    これにより --timeout / 4K 時の自動 420s が実際にリクエストへ伝播する。
+    """
+    from google import genai
+    from google.genai import types
+
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=timeout * 1000),
+    )
+
+
+def api_call_with_retry(client, model_id, contents, config):
+    """API 呼び出しをリトライ付きで実行する。
+
+    タイムアウトは client 生成時（make_client）に設定済み。
+    """
     last_error = None
 
     for attempt in range(MAX_RETRIES):
@@ -770,9 +824,7 @@ def list_available_models(api_key):
 
 def generate_single_shot(args, api_key):
     """単発生成（text-to-image / 画像編集）。N 枚指定時はループで順次生成。"""
-    from google import genai
-
-    client = genai.Client(api_key=api_key)
+    client = make_client(api_key, args.timeout)
     model_id = MODEL_SPECS[args.model].id
 
     config = build_config(args)
@@ -787,7 +839,7 @@ def generate_single_shot(args, api_key):
             print(f"Generating with {args.model} model ({model_id})...")
 
         try:
-            response = api_call_with_retry(client, model_id, contents, config, args.timeout)
+            response = api_call_with_retry(client, model_id, contents, config)
             saved_paths, thought_sigs, text_parts = extract_and_save_images(
                 response, args.output_dir, args.output_name, call_index=i
             )
@@ -812,9 +864,7 @@ def generate_single_shot(args, api_key):
 
 def generate_chat(args, api_key):
     """マルチターンチャット（セッションファイル管理）。"""
-    from google import genai
-
-    client = genai.Client(api_key=api_key)
+    client = make_client(api_key, args.timeout)
     model_id = MODEL_SPECS[args.model].id
     config = build_config(args)
 
@@ -850,7 +900,7 @@ def generate_chat(args, api_key):
         print(f"Starting new chat session: {session_path}")
 
     print(f"Generating with {args.model} model ({model_id})...")
-    response = api_call_with_retry(client, model_id, contents, config, args.timeout)
+    response = api_call_with_retry(client, model_id, contents, config)
 
     saved_paths, thought_sigs, text_parts = extract_and_save_images(
         response, args.output_dir, args.output_name, turn_num=turn_num
@@ -896,7 +946,10 @@ def generate_chat(args, api_key):
     # モデルの応答を記録
     model_parts = []
     for sig in thought_sigs:
-        model_parts.append({"thought_signature": sig})
+        # thought_signature は bytes。JSON 直列化のため base64 文字列で保存する。
+        model_parts.append(
+            {"thought_signature_b64": base64.b64encode(sig).decode("ascii")}
+        )
     for path in saved_paths:
         model_parts.append({"image_file": str(Path(path).resolve())})
     for text in text_parts:

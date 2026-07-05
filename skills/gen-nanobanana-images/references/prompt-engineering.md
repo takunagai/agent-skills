@@ -13,6 +13,15 @@ Effective prompts combine these elements:
 
 Example: `A golden retriever puppy playing with a red ball in a sunlit park. Close-up shot with shallow depth of field. Warm golden hour lighting. Photorealistic style.`
 
+## Describe Narratively and in the Positive (official guidance)
+
+Google's official prompt guidance is to **describe the scene as flowing, descriptive prose**, not a comma-separated keyword pile. Say what you *want*, positively.
+
+- Good: `A serene misty forest at dawn, soft golden light filtering through tall pines, a narrow dirt path winding into the distance.`
+- Less effective: `forest, mist, dawn, pine trees, path, golden light, 4k, best quality, highly detailed`
+
+If you need to exclude something, prefer a positive restatement — `an empty cobblestone street with no vehicles` reads better than `street, no cars, no people`. The script does **not** add any negative constraints automatically (see below).
+
 ## Text Rendering Rule
 
 To render text within images, wrap the text in **double quotation marks**:
@@ -20,25 +29,31 @@ To render text within images, wrap the text in **double quotation marks**:
 - `A coffee cup with "PREMIUM BLEND" written on it` (correct)
 - `A coffee cup with PREMIUM BLEND written on it` (may fail or distort)
 
-Pro model produces significantly more accurate text rendering than Flash.
+Pro model produces the most accurate text rendering; Flash2 is good; Lite is basic.
 
-## Negative Constraints
+Always **verify rendered text after generation** by opening the image (Read tool). Misrendered characters — especially Japanese — are common. If text is garbled, regenerate with the text wrapped in `「」`/quotes and shortened, or overlay it afterward in Figma/Photoshop.
 
-The script automatically appends quality constraints. For additional control, add to your prompt:
+## Negative Constraints (opt-in)
 
-```
-Avoid: [specific unwanted elements]
-```
+The script does **not** append any negative constraints by default. Add them only when genuinely needed, in one of two ways:
 
-Common constraints: `low quality, blurry, noisy, deformed hands, watermark, text artifacts, oversaturated colors, cropped, out of frame`
+1. **Per-prompt** — write an explicit clause into your prompt:
+
+   ```
+   Avoid: [specific unwanted elements]
+   ```
+
+2. **Persistent** — set `negative_constraints` in `config.json`; the string is appended to the end of every prompt.
+
+Example constraint string: `Avoid: low quality, blurry, deformed hands, watermark, oversaturated colors.` Prefer positive scene description over long avoid-lists (see "Describe Narratively and in the Positive").
 
 ## Model-Specific Tips
 
-**Flash** - Keep prompts concise (1-3 sentences). Best for rapid iteration and drafts.
-
-**Flash2 (Recommended)** - Supports detailed prompts (3-5 sentences) like Pro, with Flash-level speed. Best balance of quality and speed. Use `--image-search` for product/real-world object accuracy. Supports ultra-wide/tall ratios (1:4, 4:1, 1:8, 8:1) for banners and tall visuals. Use `512px` size for icons and thumbnails.
+**Flash2 (Recommended)** - Supports detailed prompts (3-5 sentences). Best balance of quality, speed, and features. Use `--image-search` for product/real-world object accuracy. Supports ultra-wide/tall ratios (1:4, 4:1, 1:8, 8:1) for banners and tall visuals. Use `512px` size for icons and thumbnails.
 
 **Pro** - Use detailed prompts (3-6 sentences). Specify technical details for best results. Ideal for final production images with maximum text rendering accuracy.
+
+**Lite** - Fastest and cheapest ($0.0336/image, 1K only). Keep prompts concise; ideal for rapid draft iteration and high-volume batches. No search grounding — describe factual details explicitly in the prompt.
 
 ## Image Editing Prompts
 
@@ -140,4 +155,4 @@ Keep the subject sharp and well-defined.
 
 - Name specific visual elements: "color palette", "lighting", "texture", "brush strokes", "composition", "framing"
 - Avoid vague references: "make it look like the reference" is less effective than "apply the warm earth tones and soft diffused lighting from the reference"
-- Flash2 or Pro recommended for reference-based generation (Flash supports only 1 total image)
+- All models accept up to 14 reference/input images; Flash2 or Pro give the best reference fidelity

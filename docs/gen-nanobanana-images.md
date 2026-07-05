@@ -1,15 +1,15 @@
 # gen-nanobanana-images
 
-Google の画像生成モデル **Nano Banana** シリーズ — **Flash**（旧版・高速）、**Flash2 / Nano Banana 2**（推奨・万能型）、**Pro**（最高品質）を使って、テキストからの画像生成・既存画像の編集・スタイルリファレンス・マルチターン反復修正を行う Claude Code スキルです。
+Google の画像生成モデル **Nano Banana** シリーズ（GA 版）— **Flash2 / Nano Banana 2**（推奨・万能型）、**Pro**（最高品質・テキスト精度最高）、**Lite / Nano Banana Lite**（最速・最安・1K 専用）を使って、テキストからの画像生成・既存画像の編集・スタイルリファレンス・マルチターン反復修正を行う Claude Code スキルです。
 
 ## できること
 
 - テキストから画像を生成（写真、イラスト、3Dレンダリング等）
 - 同じプロンプトで最大10枚のバリエーションを一括生成（`-N`）
 - 既存画像を AI で編集・加工（複数画像の同時編集も可能）
-- リファレンス画像からスタイル・色調・構図を転写（`-r`、flash2/pro）
-- マルチターンで画像を段階的に修正（flash2/pro）
-- 画像内にテキストを正確に描画（Pro が最高精度、日本語テキストがデフォルト）
+- リファレンス画像からスタイル・色調・構図を転写（`-r`、全モデルで最大14枚）
+- マルチターンで画像を段階的に修正（flash2/pro/lite）
+- 画像内にテキストを正確に描画（Pro が最高精度、日本語テキストがデフォルト。生成後の目視確認が必須）
 - Google 検索に基づく正確な図解・インフォグラフィック生成（flash2/pro）
 - Image Search で実在物の正確な写実表現（flash2 のみ）
 - 14種類のアスペクト比（flash2 は超縦長・超横長対応）、最大4K解像度に対応
@@ -17,21 +17,34 @@ Google の画像生成モデル **Nano Banana** シリーズ — **Flash**（旧
 
 ## モデル比較
 
-| | Flash（旧版） | Flash2（推奨） | Pro（最高品質） |
-|---|---|---|---|
-| 速度 | 約5〜15秒 | 約5〜15秒 | 約15〜60秒 |
-| 解像度 | 1K のみ | 512px / 1K / 2K / 4K | 1K / 2K / 4K |
-| テキスト描画 | 基本 | 良好 | 最高精度 |
-| 入力画像 | 1枚まで | 最大14枚 | 最大14枚 |
-| スタイルリファレンス | 非対応 | 対応 | 対応 |
-| マルチターン編集 | 非対応 | 対応 | 対応 |
-| Google 検索連携 | 非対応 | 対応 | 対応 |
-| Image Search 連携 | 非対応 | 対応（独占機能） | 非対応 |
-| アスペクト比 | 10種類 | 14種類（超縦長・超横長対応） | 10種類 |
-| 思考レベル | minimal/low/medium/high | minimal/high | low/high |
-| コスト | 最低 | 低い | 高い |
+いずれも GA 版（Flash2 / Pro は 2026-05-28、Lite は 2026-06-30 リリース）:
 
-**使い分け**: ほとんどのタスクには **Flash2**（デフォルト）を使用。テキスト描画の精度が最重要な場合のみ **Pro** を選択。**Flash** はレガシー互換性のみ。
+| | Flash2（推奨） | Pro（最高品質） | Lite（最速最安） |
+|---|---|---|---|
+| モデル ID | `gemini-3.1-flash-image` | `gemini-3-pro-image` | `gemini-3.1-flash-lite-image` |
+| 速度 | 約5〜15秒 | 約15〜60秒 | 最速 |
+| 解像度 | 512px / 1K / 2K / 4K | 1K / 2K / 4K | 1K のみ |
+| テキスト描画 | 良好 | 最高精度 | 基本 |
+| 入力画像 | 最大14枚 | 最大14枚 | 最大14枚 |
+| スタイルリファレンス | 対応 | 対応 | 対応 |
+| マルチターン編集 | 対応 | 対応 | 対応 |
+| Google 検索連携 | 対応 | 対応 | 非対応 |
+| Image Search 連携 | 対応（独占機能） | 非対応 | 非対応 |
+| アスペクト比 | 14種類（超縦長・超横長対応） | 10種類 | 10種類 |
+| 思考レベル | minimal/high | low/high | minimal/high |
+| コスト | 低い | 高い | 最低 |
+
+**使い分け**: ほとんどのタスクには **Flash2**（デフォルト）を使用。テキスト描画の精度が最重要な場合のみ **Pro** を選択。最速・最安のドラフトや大量生成には **Lite**（1K 専用・検索連携なし）を使用。
+
+### 料金の目安（画像1枚あたり, Standard tier, 2026-06-30 時点, 出典 https://ai.google.dev/gemini-api/docs/pricing）
+
+| モデル | 512px | 1K | 2K | 4K |
+|---|---|---|---|---|
+| Lite | ─ | $0.0336 | ─ | ─ |
+| Flash2 | $0.045 | $0.067 | $0.101 | $0.151 |
+| Pro | ─ | $0.134 | $0.134 | $0.24 |
+
+概算コストが **$0.5 を超える実行**（例: Pro 4K、`-N` 4 枚以上、4K のバッチ）は、実行前に「枚数 × 単価」の概算を提示して確認するのが安全です。
 
 ---
 
@@ -74,13 +87,15 @@ python3 scripts/generate_image.py ...
 ### 3. 依存パッケージをインストール
 
 ```bash
-pip install google-genai Pillow
+pip install -U "google-genai>=2.10.0" Pillow
 ```
+
+**SDK は 2.10.0 以上が必須**です。Image Search 連携は typed な `SearchTypes` クラス（`google-genai >= 1.65.0` で導入、2.10.0+ 推奨）を使うため、古い SDK では動作しません。
 
 | パッケージ | 説明 |
 |-----------|------|
-| `google-genai` | Google Gemini API の公式 Python SDK。画像生成・テキスト生成の API 呼び出しに使用 |
-| `Pillow` | Python の画像処理ライブラリ。API レスポンスから画像データを PNG ファイルとして保存する際に使用 |
+| `google-genai`（>=2.10.0） | Google Gemini API の公式 Python SDK。画像生成・テキスト生成の API 呼び出しに使用 |
+| `Pillow`（>=10.0.0） | Python の画像処理ライブラリ。API レスポンスから画像データを PNG ファイルとして保存する際に使用 |
 
 ### 4. スキルをインストール
 
@@ -173,7 +188,7 @@ Pro で "グランドオープン" と書かれたバナー画像を作って。
 ```
 
 ```
-Flash モデルでラフスケッチを生成して。猫がソファで寝ている絵。
+Lite モデルでラフスケッチを生成して。猫がソファで寝ている絵。
 ```
 
 ---
@@ -212,7 +227,7 @@ YouTube サムネイル用に 16:9 で生成して。
 ```
 
 ```
-Flash で背景パターンを 10枚生成して。抽象的な幾何学模様、パステルカラー。
+Lite で背景パターンを 10枚生成して。抽象的な幾何学模様、パステルカラー。
 ```
 
 ---
@@ -544,9 +559,9 @@ python3 scripts/generate_image.py \
 python3 scripts/generate_image.py \
   -p 'A sign reading "ようこそ" in bold letters' -m pro -o ./output
 
-# 旧 Flash モデルで高速生成
+# Lite モデルで最速・最安のドラフト生成（1K 専用）
 python3 scripts/generate_image.py \
-  -p "Quick draft sketch" -m flash -o ./output
+  -p "Quick draft sketch" -m lite -o ./output
 
 # 利用可能モデル一覧
 python3 scripts/generate_image.py --list-models
@@ -558,20 +573,20 @@ python3 scripts/generate_image.py --list-models
 |------|------|-----------|------|
 | `--prompt` | `-p` | **必須** | テキストプロンプト |
 | `--list-models` | | - | 利用可能モデル一覧を表示 |
-| `--model` | `-m` | `flash2` | `flash`, `flash2`（推奨）, `pro` |
+| `--model` | `-m` | `flash2` | `flash2`（推奨）, `pro`, `lite` |
 | `--input-image` | `-i` | なし | 編集用入力画像パス（複数指定可） |
 | `--reference` | `-r` | なし | スタイル/構図リファレンス画像パス（複数指定可） |
 | `--num-images` | `-N` | `1` | 生成する画像の枚数（最大10枚） |
 | `--output-dir` | `-o` | `.` | 出力ディレクトリ |
-| `--output-name` | `-n` | 自動 | 出力ファイル名（拡張子なし） |
+| `--output-name` | `-n` | 自動 | 出力ファイル名（拡張子なし。既存ファイルは上書きせず `_2` の連番を付与） |
 | `--aspect-ratio` | `-a` | `1:1` | アスペクト比 |
-| `--image-size` | `-s` | なし | 解像度（flash2: 512px/1K/2K/4K, pro: 1K/2K/4K） |
-| `--thinking-level` | `-t` | なし | 思考レベル |
+| `--image-size` | `-s` | なし | 解像度（flash2: 512px/1K/2K/4K, pro: 1K/2K/4K, lite: 1K のみ） |
+| `--thinking-level` | `-t` | なし | 思考レベル（flash2/lite: minimal/high, pro: low/high） |
 | `--google-search` | `-g` | なし | Google 検索連携（flash2/pro） |
-| `--image-search` | | なし | Image Search 連携（flash2 のみ） |
-| `--chat` | `-c` | なし | マルチターン新規セッション（flash2/pro） |
+| `--image-search` | | なし | Image Search 連携（flash2 のみ。SDK >= 2.10.0 必須） |
+| `--chat` | `-c` | なし | マルチターン新規セッション（flash2/pro/lite） |
 | `--session` | | なし | 既存セッション継続 |
-| `--timeout` | | 120 | タイムアウト秒（4K は自動 420s） |
+| `--timeout` | | 120 | タイムアウト秒（4K は自動 420s。実際に API へ伝播） |
 
 ### アスペクト比
 
@@ -589,13 +604,13 @@ python3 scripts/generate_image.py --list-models
 
 | キー | 型 | デフォルト | 説明 |
 |------|-----|-----------|------|
-| `model` | `"flash"` / `"flash2"` / `"pro"` | `"flash2"` | デフォルトモデル |
+| `model` | `"flash2"` / `"pro"` / `"lite"` | `"flash2"` | デフォルトモデル |
 | `aspect_ratio` | string | `"1:1"` | デフォルトアスペクト比 |
 | `output_dir` | string | `"."` | デフォルト出力ディレクトリ |
 | `num_images` | int (1-10) | `1` | デフォルト生成枚数 |
 | `timeout` | int | `120` | デフォルトタイムアウト秒数 |
 | `thinking_level` | string / null | `null` | デフォルト思考レベル |
-| `negative_constraints` | string | `"Avoid: low quality, ..."` | ネガティブプロンプト。空文字で無効化可能 |
+| `negative_constraints` | string | `""`（空文字） | **既定は付加しない**。文字列を設定した場合のみ全プロンプト末尾に付加する opt-in 方式。例: `"Avoid: low quality, blurry, deformed hands, watermark."` |
 
 ### 設定例
 
@@ -617,6 +632,14 @@ python3 scripts/generate_image.py --list-models
 }
 ```
 
+ネガティブプロンプトを常時付加したい場合（既定は空文字＝付加しない。opt-in）:
+
+```json
+{
+  "negative_constraints": "Avoid: low quality, blurry, deformed hands, watermark."
+}
+```
+
 必要なキーだけ記述すれば OK です。未指定のキーはビルトインデフォルトが使われます。
 
 ---
@@ -630,7 +653,8 @@ python3 scripts/generate_image.py --list-models
 | 画像が生成されない | プロンプトが安全フィルターに引っかかった可能性。内容を変更して再試行 |
 | レート制限 (429) | 自動リトライ（最大3回）。頻発する場合は時間を空ける |
 | 4K がタイムアウト | `--timeout 600` で延長（デフォルトは 4K 時自動 420s） |
-| パッケージ未インストール | `pip install google-genai Pillow` |
+| Image Search が動かない（SDK が古い） | `types.SearchTypes` 非対応の SDK。`pip install -U 'google-genai>=2.10.0'` を実行 |
+| パッケージ未インストール | `pip install -U "google-genai>=2.10.0" Pillow` |
 | `python` が見つからない | macOS では `python3` を使用 |
 | config.json が無視される | スキルディレクトリ直下（`SKILL.md` と同階層）に配置されているか確認 |
 

@@ -1,18 +1,18 @@
 ---
 name: gen-nanobanana-images
-description: "Generate and edit images using Google Gemini image models (Nano Banana series). Supports text-to-image, image editing, and multi-turn refinement with Flash (fast/draft), Flash2 (recommended/balanced), and Pro (production/4K) models. Use when users request: (1) AI image generation from text, (2) editing or modifying existing images, (3) iterative multi-turn image refinement, (4) text rendering in images, or (5) infographics and visualizations with Gemini models."
+description: "Generate and edit images using Google Gemini image models (Nano Banana series, GA). Supports text-to-image, image editing, and multi-turn refinement with Flash2 (recommended/balanced), Pro (production/4K/highest text accuracy), and Lite (fastest/cheapest/1K draft) models. Use when users request: (1) AI image generation from text, (2) editing or modifying existing images, (3) iterative multi-turn image refinement, (4) text rendering in images, or (5) infographics and visualizations with Gemini models."
 ---
 
 # Nano Banana Image Generation
 
 ## Overview
 
-Generate and edit images using Google's Nano Banana series: Flash (fast draft), Flash2/Nano Banana 2 (recommended, balanced speed+features), and Pro (production quality). Supports text-to-image generation, image editing with input images, and multi-turn iterative refinement with session persistence.
+Generate and edit images using Google's Nano Banana series (GA models, released 2026-05-28): Flash2/Nano Banana 2 (recommended, balanced speed+features), Pro (production quality, highest text accuracy), and Lite/Nano Banana Lite (fastest, cheapest, 1K draft). Supports text-to-image generation, image editing with input images, and multi-turn iterative refinement with session persistence.
 
 ### Prerequisites
 
 - **API Key**: `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable (get at https://aistudio.google.com/apikey)
-- **Dependencies**: `pip install google-genai Pillow` (see `requirements.txt`)
+- **Dependencies**: `pip install -U "google-genai>=2.10.0" Pillow` (see `requirements.txt`). SDK **>= 2.10.0 required** — Image Search grounding uses typed `SearchTypes` classes that only exist in `google-genai >= 1.65.0` (2.10.0+ recommended).
 
 ## Workflow Decision Tree
 
@@ -20,14 +20,23 @@ Determine which workflow to use:
 
 1. **Want to create a new image from text?** → Go to [Text-to-Image Generation](#text-to-image-generation)
 2. **Want to edit or modify an existing image?** → Go to [Image Editing](#image-editing)
-3. **Want to apply a style from reference images?** → Go to [Style Reference](#style-reference) (flash2/pro)
-4. **Want to iteratively refine an image over multiple turns?** → Go to [Multi-Turn Editing](#multi-turn-editing) (flash2/pro)
+3. **Want to apply a style from reference images?** → Go to [Style Reference](#style-reference) (all models; flash2/pro best fidelity)
+4. **Want to iteratively refine an image over multiple turns?** → Go to [Multi-Turn Editing](#multi-turn-editing) (flash2/pro/lite)
 5. **Need factual/grounded image content?** → Go to [Google Search Grounding](#google-search-grounding) (flash2/pro)
 6. **Need image-based search results?** → Go to [Image Search Grounding](#image-search-grounding) (flash2 only)
 
 ## Gathering Parameters
 
 Before running the script, collect all required parameters from the user. Follow these principles:
+
+### Non-Interactive Mode (Delegation / Complete Params) — Check This First
+
+**Do NOT use AskUserQuestion when parameters are already sufficient.** Run the script immediately (with sensible defaults for anything unspecified) in these cases:
+
+- **Called as an image-generation engine by another skill** (e.g. `gen-lifestyle-images`, `print-card-comp`). These skills pass a full prompt and flags; never interrupt them with AskUserQuestion.
+- **The user's instruction already contains the needed parameters** (subject + any model/ratio/size they cared to specify). Fill unspecified params from defaults (model `flash2`, ratio `1:1`, no `-s` unless requested).
+
+AskUserQuestion is **only** for interactive, brand-new requests where the subject or key parameters are genuinely missing.
 
 ### Information Collection Principles
 
@@ -45,7 +54,7 @@ After understanding the image description, collect missing parameters with **one
 |--------|-------|-------------|
 | 1 | Flash2 (Recommended) | 高速＋高機能（マルチターン・4K・検索連携対応）。最もバランスが良い |
 | 2 | Pro | 最高品質・テキスト描画精度最高。本番の重要な制作物向け |
-| 3 | Flash | 旧版。超高速だが機能制限あり（1K・単発のみ） |
+| 3 | Lite | 最速・最安（$0.0336/枚）。1K 専用・検索連携なし。ドラフトや大量生成向け |
 
 **Question 2: Aspect Ratio (header: "Ratio")**
 
@@ -71,6 +80,8 @@ User can select "Other" to type custom styles like watercolor, oil painting, pix
 
 ### Flash2/Pro Model Follow-Up (Conditional)
 
+If the user selects **Lite**, **skip the resolution question** (Lite is 1K only) and skip Google/Image Search (unsupported); only ask the text-rendering option if relevant.
+
 If the user selects **Flash2** or **Pro**, ask a **second AskUserQuestion** with up to 2 questions:
 
 **Question 1: Resolution (header: "Resolution")**
@@ -80,7 +91,7 @@ If the user selects **Flash2** or **Pro**, ask a **second AskUserQuestion** with
 | 1 | 1K (Recommended) | 標準解像度。速度とコストのバランスが良い |
 | 2 | 2K | 高解像度。印刷や大画面表示向け |
 | 3 | 4K | 最高解像度。生成に最大6分かかる場合あり |
-| 4 | 512px | アイコン・サムネイル用の小サイズ（flash2 のみ） |
+| 4 | 512px | アイコン・サムネイル用の小サイズ（**flash2 のみ**。pro は 1K/2K/4K） |
 
 **Question 2: Options (header: "Options", multiSelect: true)**
 
@@ -127,22 +138,33 @@ Example: User says "PREMIUM COFFEE のロゴを作って"
 
 ## Model Selection
 
-Choose the right model for your task:
+Choose the right model for your task. All three are GA models (released 2026-05-28 / Lite 2026-06-30):
 
-| Feature | Flash (旧版) | Flash2 (推奨) | Pro (最高品質) |
-|---------|-------------|--------------|---------------|
-| Speed | Fast (~5-15s) | Fast (~5-15s) | Slower (~15-60s) |
-| Resolution | 1K only | 512px, 1K, 2K, 4K | 1K, 2K, 4K |
-| Text Rendering | Basic | Good | High accuracy |
-| Multi-Turn Editing | No | Yes | Yes |
-| Google Search | No | Yes | Yes |
-| Image Search | No | Yes (exclusive) | No |
-| Max Images/Prompt | 1 | 14 | 14 |
-| Aspect Ratios | 10 standard | 10 + 4 ultra (1:4, 4:1, 1:8, 8:1) | 10 standard |
-| Thinking Levels | minimal/low/medium/high | minimal/high | low/high |
-| Cost | Lowest | Low | Higher |
+| Feature | Flash2 (推奨) | Pro (最高品質) | Lite (最速最安) |
+|---------|--------------|---------------|----------------|
+| Model ID | `gemini-3.1-flash-image` | `gemini-3-pro-image` | `gemini-3.1-flash-lite-image` |
+| Speed | Fast (~5-15s) | Slower (~15-60s) | Fastest |
+| Resolution | 512px, 1K, 2K, 4K | 1K, 2K, 4K | 1K only |
+| Text Rendering | Good | High accuracy | Basic |
+| Multi-Turn Editing | Yes | Yes | Yes |
+| Google Search | Yes | Yes | No |
+| Image Search | Yes (exclusive) | No | No |
+| Max Images/Prompt | 14 | 14 | 14 |
+| Aspect Ratios | 10 + 4 ultra (1:4, 4:1, 1:8, 8:1) | 10 standard | 10 standard |
+| Thinking Levels | minimal/high | low/high | minimal/high |
+| Cost | Low | Higher | Lowest |
 
-**Recommendation**: Use **Flash2** (default) for most tasks — it offers Pro-level features at Flash speed. Use **Pro** when maximum text rendering accuracy is critical. Use **Flash** only for legacy compatibility.
+**Recommendation**: Use **Flash2** (default) for most tasks — best balance of quality, speed, and features. Use **Pro** when maximum text rendering accuracy is critical. Use **Lite** for the fastest, cheapest drafts and high-volume batches (1K only, no search grounding).
+
+### Cost Guide (per image, Standard tier, 2026-06-30, source: https://ai.google.dev/gemini-api/docs/pricing)
+
+| Model | 512px | 1K | 2K | 4K |
+|-------|-------|-----|-----|-----|
+| Lite | — | $0.0336 | — | — |
+| Flash2 | $0.045 | $0.067 | $0.101 | $0.151 |
+| Pro | — | $0.134 | $0.134 | $0.24 |
+
+**Cost guardrail (agent)**: Before running any execution whose estimated cost exceeds **$0.5** (e.g. Pro 4K, `-N` 4+ images, any 4K batch), present the estimate (image count × unit price) to the user and confirm before generating.
 
 ## Prompt Construction
 
@@ -155,11 +177,23 @@ Build effective prompts using the **6-element structure**:
 5. **Lighting** - Light quality/direction
 6. **Style** - Artistic style
 
-**Text rendering**: Wrap text in double quotes: `"プレミアム"` in the prompt to render text in the image. **画像内テキストのデフォルト言語は日本語**。ユーザーが英語や他言語を明示した場合、またはブランド名・固有名詞の場合はそのまま使用。判断が難しい場合はユーザーに確認する。
+**Describe the scene narratively and in the positive (Google official guidance)**: write what you *want* as flowing descriptive sentences, not a keyword list. Prefer "A serene misty forest at dawn with soft golden light" over "forest, mist, dawn, golden, 4k, best quality". If you must exclude something, state it as a positive alternative ("an empty street with no cars" rather than "no cars"). The script no longer auto-appends any negative constraints — add an `Avoid: ...` clause explicitly only when genuinely needed, or opt in via `config.json` (`negative_constraints`).
+
+**Text rendering**: Wrap the exact text in double quotes — `"プレミアム"` — so the model renders it. Keep each text element to **one short string** (a heading + a short label at most; long body text belongs in Figma/Photoshop). Specify a font style when it matters (sans-serif / serif / handwritten). **画像内テキストのデフォルト言語は日本語**。ユーザーが英語や他言語を明示した場合、またはブランド名・固有名詞の場合はそのまま使用。判断が難しい場合はユーザーに確認する。**Always visually verify rendered text after generation** (see [Post-Generation Verification](#post-generation-verification)) — misrendered characters are common, especially in Japanese.
 
 When using AskUserQuestion-collected parameters, incorporate the selected **Style** as the final style element of the prompt. See [Prompt Assembly from Collected Parameters](#prompt-assembly-from-collected-parameters) for the full assembly process.
 
 For industry-specific templates and advanced techniques, see `references/prompt-engineering.md`.
+
+## Post-Generation Verification
+
+**After every generation, open each produced image with the Read tool and verify it.** This is mandatory, not optional. Check:
+
+- **(a) Match** — Does the image match what was requested (subject, composition, ratio)?
+- **(b) Text integrity** — Are any in-image text strings free of typos / garbled characters? Japanese text is especially prone to corruption.
+- **(c) Breakage** — Any broken hands, faces, letters, or composition artifacts?
+
+If in-image text is garbled, either **regenerate** (wrap the text in `「」`/double quotes, shorten it, specify font) or advise the user to **overlay the text afterward in Figma/Photoshop**. Do not deliver an image with garbled text without flagging it.
 
 ## Text-to-Image Generation
 
@@ -208,7 +242,7 @@ Each variation is a separate API call, producing unique results. Files are named
 
 **Note**: `-N` is not available with multi-turn mode (`--chat`/`--session`). Max 10 images per execution.
 
-**Note**: The script automatically appends Negative Constraints (`low quality, blurry, noisy...`) to every prompt for quality assurance.
+**Note**: The script does **not** append any negative constraints by default. If you need them, write an `Avoid: ...` clause into your prompt, or set `negative_constraints` in `config.json` (opt-in).
 
 ## Image Editing
 
@@ -243,12 +277,11 @@ python3 scripts/generate_image.py \
 
 - Max total file size: 7 MB (all images combined)
 - Supported formats: PNG, JPEG, WebP, HEIC, HEIF
-- Flash model: 1 image max (input or reference)
-- Flash2/Pro model: up to 14 images total (input + reference combined)
+- All models (flash2 / pro / lite): up to 14 images total (input + reference combined)
 
 ## Style Reference
 
-Apply the visual style, color palette, or composition from reference images to new or existing images. Available with **Flash2** (default) and **Pro** models (multiple images require flash2/pro).
+Apply the visual style, color palette, or composition from reference images to new or existing images. All models accept up to 14 reference/input images; **Flash2** (default) and **Pro** give the best reference fidelity.
 
 ### Generate with Style Reference
 
@@ -286,12 +319,12 @@ python3 scripts/generate_image.py \
 
 - Explicitly describe which aspects to reference: "color palette", "lighting style", "composition", "brush strokes"
 - Combine reference images with detailed text prompts for best results
-- Use Flash2 or Pro model (Flash only supports 1 image total)
+- All models accept up to 14 input+reference images; Flash2/Pro give the best reference fidelity
 - See `references/prompt-engineering.md` for detailed style reference techniques
 
 ## Multi-Turn Editing
 
-Iteratively refine images through conversational editing. Available with **Flash2** (default) and **Pro** models.
+Iteratively refine images through conversational editing. Available with **Flash2** (default), **Pro**, and **Lite** models.
 
 The script manages thought signatures automatically through session files, enabling the model to understand and modify its previous output.
 
@@ -363,29 +396,30 @@ Best for: product photos, real-world object references, current visual trends.
 |----------|-------|---------|-------------|
 | `--prompt` | `-p` | **Required** | Text prompt |
 | `--list-models` | | False | Query API for available image models |
-| `--model` | `-m` | `flash2` | `flash`, `flash2` (recommended), or `pro` |
+| `--model` | `-m` | `flash2` | `flash2` (recommended), `pro`, or `lite` |
 | `--input-image` | `-i` | None | Input image path(s) for editing (multiple OK) |
 | `--reference` | `-r` | None | Style/composition reference image path(s) |
 | `--num-images` | `-N` | `1` | 生成する画像の枚数 (max: 10) |
 | `--output-dir` | `-o` | `.` | Output directory |
-| `--output-name` | `-n` | Auto | Output filename (no extension) |
+| `--output-name` | `-n` | Auto | Output filename (no extension; existing files are never overwritten — a `_2` suffix is added) |
 | `--aspect-ratio` | `-a` | `1:1` | Aspect ratio |
-| `--image-size` | `-s` | None | Resolution (flash2: 512px/1K/2K/4K, pro: 1K/2K/4K) |
-| `--thinking-level` | `-t` | None | Thinking level |
+| `--image-size` | `-s` | None | Resolution (flash2: 512px/1K/2K/4K, pro: 1K/2K/4K, lite: 1K only) |
+| `--thinking-level` | `-t` | None | Thinking level (flash2/lite: minimal/high, pro: low/high) |
 | `--google-search` | `-g` | False | Enable Google Search (flash2/pro) |
-| `--image-search` | | False | Enable Image Search (flash2 only) |
-| `--chat` | `-c` | False | Start new multi-turn session (flash2/pro) |
+| `--image-search` | | False | Enable Image Search (flash2 only; requires SDK >= 2.10.0) |
+| `--chat` | `-c` | False | Start new multi-turn session (flash2/pro/lite) |
 | `--session` | | None | Continue existing session |
-| `--timeout` | | 120 | Timeout in seconds (auto 420s for 4K) |
+| `--timeout` | | 120 | Timeout in seconds (auto 420s for 4K; actually propagated to the API) |
 
 ## Constraints
 
 - **Aspect ratios**: 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9 (all models) + 1:4, 4:1, 1:8, 8:1 (flash2 only)
-- **Image sizes**: flash2: 512px/1K/2K/4K, pro: 1K/2K/4K, flash: 1K only
+- **Image sizes**: flash2: 512px/1K/2K/4K, pro: 1K/2K/4K, lite: 1K only
 - **Max inline file size**: 7 MB total (all images combined)
-- **Thinking levels**: flash: minimal/low/medium/high, flash2: minimal/high, pro: low/high
+- **Thinking levels**: flash2: minimal/high, pro: low/high, lite: minimal/high
 - **Max images per execution**: 10 (`-N` flag)
-- **Multi-turn/Google Search**: flash2, pro
+- **Multi-turn**: flash2, pro, lite
+- **Google Search**: flash2, pro
 - **Image Search**: flash2 only
 
 ## Configuration File
@@ -402,19 +436,19 @@ Best for: product photos, real-world object references, current visual trends.
   "num_images": 1,
   "timeout": 120,
   "thinking_level": null,
-  "negative_constraints": "Avoid: low quality, blurry, noisy, deformed hands, watermark, text artifacts, oversaturated colors."
+  "negative_constraints": ""
 }
 ```
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `model` | `"flash"` \| `"flash2"` \| `"pro"` | デフォルトモデル |
+| `model` | `"flash2"` \| `"pro"` \| `"lite"` | デフォルトモデル |
 | `aspect_ratio` | string | デフォルトアスペクト比 |
 | `output_dir` | string | デフォルト出力ディレクトリ |
 | `num_images` | int (1-10) | デフォルト生成枚数 |
 | `timeout` | int | デフォルトタイムアウト秒数 |
 | `thinking_level` | string \| null | デフォルト思考レベル |
-| `negative_constraints` | string | 品質担保用のネガティブプロンプト。空文字 `""` で無効化可能 |
+| `negative_constraints` | string | **既定は空文字（付加しない）**。ここに文字列を設定した場合のみ全プロンプト末尾に付加される opt-in 方式。例: `"Avoid: low quality, blurry, deformed hands, watermark."` |
 
 ### 使用例
 
@@ -439,7 +473,8 @@ Best for: product photos, real-world object references, current visual trends.
 | No images in response | Prompt may be filtered; simplify content |
 | Rate limit (429) | Script auto-retries with backoff (max 3) |
 | 4K timeout | Auto-adjusted to 420s when `--image-size 4K` |
-| Import error | Run `pip install google-genai Pillow` |
+| SDK too old (no `SearchTypes`) — Image Search fails | Run `pip install -U 'google-genai>=2.10.0'` |
+| Import error | Run `pip install -U "google-genai>=2.10.0" Pillow` |
 
 For detailed error codes and API specifications, see `references/api-reference.md`.
 
@@ -448,5 +483,5 @@ For detailed error codes and API specifications, see `references/api-reference.m
 ```bash
 pip install -r requirements.txt
 # or directly:
-pip install google-genai Pillow
+pip install -U "google-genai>=2.10.0" Pillow
 ```

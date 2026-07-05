@@ -2,21 +2,38 @@
 
 ## Model Specifications
 
-| Feature | Flash (旧版) | Flash2 / NB2 (推奨) | Pro (最高品質) |
-|---------|-------------|---------------------|---------------|
-| Model ID | `gemini-2.5-flash-image` | `gemini-3.1-flash-image-preview` | `gemini-3-pro-image-preview` |
-| Max Input Tokens | 32,768 | 32,768 | 65,536 |
-| Max Output Tokens | 8,192 | 8,192 | 32,768 |
-| Max Images/Prompt | 1 | 14 | 14 |
-| Image Sizes | 1K only | 512px, 1K, 2K, 4K | 1K, 2K, 4K |
-| Text Rendering | Basic | Good | High accuracy |
-| Google Search | No | Yes | Yes |
-| Image Search | No | Yes (exclusive) | No |
-| Thinking Levels | minimal, low, medium, high | minimal, high | low, high |
-| Multi-Turn Editing | No | Yes (thought_signature: SDK auto) | Yes (thought_signature required) |
-| Aspect Ratios | 10 standard | 10 + 4 ultra | 10 standard |
-| Speed | Fast (~5-15s) | Fast (~5-15s) | Slower (~15-60s, 4K: ~180-360s) |
-| Cost | Lowest | Low | Higher |
+GA models (Flash2 / Pro released 2026-05-28, Lite released 2026-06-30):
+
+| Feature | Flash2 / NB2 (推奨) | Pro (最高品質) | Lite (最速最安) |
+|---------|---------------------|---------------|----------------|
+| Model ID | `gemini-3.1-flash-image` | `gemini-3-pro-image` | `gemini-3.1-flash-lite-image` |
+| Max Input Tokens | 32,768 | 65,536 | 32,768 |
+| Max Output Tokens | 8,192 | 32,768 | 8,192 |
+| Max Images/Prompt | 14 | 14 | 14 |
+| Image Sizes | 512px, 1K, 2K, 4K | 1K, 2K, 4K | 1K only |
+| Text Rendering | Good | High accuracy | Basic |
+| Google Search | Yes | Yes | No |
+| Image Search | Yes (exclusive) | No | No |
+| Thinking Levels | minimal, high | low, high | minimal, high |
+| Multi-Turn Editing | Yes | Yes (thought_signature required) | Yes |
+| Aspect Ratios | 10 + 4 ultra | 10 standard | 10 standard |
+| Speed | Fast (~5-15s) | Slower (~15-60s, 4K: ~180-360s) | Fastest |
+| Cost | Low | Higher | Lowest |
+
+### 旧モデル（廃止）
+
+- `gemini-2.5-flash-image`（旧 Flash）: 公式で「レガシー。移行を強く推奨」。本スキルからは削除済み。ドラフト用途は Lite を使う。
+- `gemini-3.1-flash-image-preview` / `gemini-3-pro-image-preview`（preview ID）: 2026-05-28 に deprecated 告知、**2026-06-25 shutdown**。GA ID（`gemini-3.1-flash-image` / `gemini-3-pro-image`）へ移行済み。`--list-models` には preview ID がまだ列挙されることがあるが常用してはならない。
+
+## Pricing（画像 1 枚あたり, Standard tier, 2026-06-30, 出典 https://ai.google.dev/gemini-api/docs/pricing）
+
+| Model | 512px | 1K | 2K | 4K |
+|-------|-------|-----|-----|-----|
+| Lite | — | $0.0336 | — | — |
+| Flash2 | $0.045 | $0.067 | $0.101 | $0.151 |
+| Pro | — | $0.134 | $0.134 | $0.24 |
+
+（Pro は 512px 帯なし。Lite は 1K のみ。）
 
 ## Aspect Ratios
 
@@ -55,6 +72,8 @@ config_with_image_search = types.GenerateContentConfig(
     ))],
 )
 ```
+
+> **SDK requirement for Image Search**: the typed `types.SearchTypes` / `types.ImageSearch` / `types.WebSearch` classes were introduced in **`google-genai` v1.65.0** (2026-02-26); **v2.10.0+ recommended**. On older SDKs these classes are absent and there is no working raw-dict fallback (the API rejects it via `extra_forbidden`). The script checks `hasattr(types, "SearchTypes")` at startup and exits with an upgrade message if missing. Image Search grounding is **flash2 only**.
 
 ### Part Types for Image Input
 
@@ -98,6 +117,10 @@ Thought signatures are mandatory for Gemini 3 Pro Image multi-turn editing.
 3. Missing or invalid signatures cause **400 errors**
 4. The model uses signatures to understand the original image's composition and logic
 
+### Session persistence (base64)
+
+`thought_signature` values are raw **bytes** and cannot be `json.dump`-ed directly. The script stores each signature in the session JSON as a base64 string under the key **`thought_signature_b64`** (`base64.b64encode(sig).decode("ascii")`), and decodes it back to bytes with `base64.b64decode` when rebuilding history for the next turn. (Earlier builds tried to serialize the raw bytes and crashed with `TypeError: Object of type bytes is not JSON serializable`, so no legacy `thought_signature` key exists in valid session files.)
+
 ### Signature Positions in Response
 
 ```
@@ -139,10 +162,10 @@ If the response contains no image parts, the prompt was likely filtered by safet
 |-----------|-------|
 | Max inline file size | 7 MB |
 | Max Cloud Storage file size | 30 MB |
-| Max images per prompt (Flash2/Pro) | 14 |
-| Max images per prompt (Flash) | 1 |
+| Max images per prompt (all models) | 14 |
 | Image sizes (Flash2) | 512px, 1K, 2K, 4K |
 | Image sizes (Pro) | 1K, 2K, 4K |
+| Image sizes (Lite) | 1K only |
 | Temperature range | 0.0 - 2.0 |
 | topP default | 0.95 |
 | topK | 64 (fixed) |

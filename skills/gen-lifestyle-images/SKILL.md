@@ -120,7 +120,7 @@ gen-lifestyle-images/
 
 ### Negative Constraints
 
-gen-nanobanana-images が自動付加するネガティブプロンプトに加え、プリセットの「避けるべき要素」を追加。
+gen-nanobanana-images は既定でネガティブプロンプトを自動付加しない。プリセットの「避けるべき要素」は、プロンプト内に明示的に含める（`Avoid: ...` の一節として記述するか、叙述的・肯定形で言い換えて表現する）。
 
 ## Scene Types
 

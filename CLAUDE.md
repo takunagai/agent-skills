@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI エージェント（Claude Code / Codex / Gemini CLI / Cursor など）用の自作スキル・サブエージェントの**公開モノレポ**。Markdown とスクリプト資産の管理が主で、ビルド・lint・テストの仕組みは存在しない。
 
-対となる**非公開モノレポ agent-assets-private**（ローカル: `~/Projects/agent-assets-private`）と同一のディレクトリ構造を維持する。ここに置けるのは公開できるものだけ。案件固有・個人運用・機密設定を含むスキルは非公開側で管理する（例: article 系サブエージェントは article-fact-checker のみここ、他 3 体は非公開側）。片方の構造を変えるときは、もう片方との整合を必ず確認する。
+対となる**非公開モノレポ agent-assets-private**（ローカル: `~/Projects/agent-assets-private`）と同一のディレクトリ構造を維持する。ここに置けるのは公開できるものだけ。案件固有・個人運用・機密設定を含むスキルは非公開側で管理する（例: article 系サブエージェント 4 体はすべて非公開側で管理する）。片方の構造を変えるときは、もう片方との整合を必ず確認する。
 
 ## 配置規約（最重要 ─ ファイルを新規作成する前に必ずここを確認）
 

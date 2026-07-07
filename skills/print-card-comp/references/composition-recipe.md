@@ -13,7 +13,7 @@ import sys; sys.path.insert(0, "<SKILL_DIR>/scripts")
 from PIL import Image, ImageDraw
 from card_compose import (
     new_canvas, cover, tc, tx, fit_font, tate, pc, panel, badge,
-    to_mono, duotone, guides, trim, sheet, load_fonts, mmpx, save,
+    to_mono, duotone, ink_alpha, guides, trim, sheet, load_fonts, mmpx, save,
 )
 
 W, H = 909, 2563  # 形状に応じて card-specs.md の画素数列から
@@ -45,6 +45,7 @@ RED = (196, 24, 36, 255)         # アクセント（実製品色に色校正前
 | CTA ボタン | `badge(base, box, radius, fill, text, font)` | 角丸 + 中央テキスト |
 | モノクロ（1C）化 | `to_mono(img)` | `autocontrast` 既定 ON で眠さ回避 |
 | 2 色刷り（2C）化 | `duotone(img, ink, paper)` | 暗部→ink・明部→paper。特色を正確に統一 |
+| 生成した飾り文字を透過パーツ化 | `ink_alpha(img, ink)` | 白地→透明・墨→ink 単色。ロゴ同様 `pc` で配置（`bg-prompt-library.md` 節 5） |
 | 検版（塗り足し・安全線） | `guides(img)` | マゼンタ=仕上がり線 / シアン=安全マージン。Phase 5.5 用 |
 | 仕上がりプレビュー | `trim(img)` | 塗り足しを落として仕上がり見当を確認 |
 | 複数案を並べる | `sheet([a, b], labels=[...])` | 提案シート |

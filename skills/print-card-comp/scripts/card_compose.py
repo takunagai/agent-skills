@@ -21,6 +21,7 @@ import して使う:
     カバーフィット      : cover(img, w, h, ax, ay)
     モノクロ(1C)化      : to_mono(img)
     2 色刷り(2C)化      : duotone(img, ink, paper)
+    飾り文字の透過パーツ化: ink_alpha(img, ink)     白地に生成した筆文字等を単色透過に
     検版ガイド          : guides(img)          仕上がり線=マゼンタ / 安全マージン=シアン
     仕上がりプレビュー  : trim(img)            塗り足しを落とす
     提案シート          : sheet([img, ...], labels=[...])
@@ -335,6 +336,21 @@ def duotone(img: Image.Image, ink, paper=(252, 250, 246), mid=None) -> Image.Ima
     out = out.convert("RGBA")
     if "A" in img.getbands():
         out.putalpha(img.getchannel("A"))
+    return out
+
+
+def ink_alpha(img: Image.Image, ink=(40, 38, 36)) -> Image.Image:
+    """白地に描かれた文字・図版を透過パーツ化する（白→透明・墨→ink 色）。
+
+    生成モデルで作った筆文字・カリグラフィ等の装飾文字パーツを、ロゴと同じように
+    pc() で合成できる RGBA に変換する。輝度を alpha に写すため、かすれ・にじみは
+    半透明のインクとして保たれる。全画素が ink 単色になるので、K 単色・特色単版と
+    して扱え、生成文字の RGB 混色問題（4 色の乗った文字）を回避できる。
+    """
+    g = ImageOps.autocontrast(img.convert("L"), cutoff=1)  # わずかな地色被りを白へ寄せる
+    alpha = ImageOps.invert(g)  # 白=0（透明）, 墨=255（不透明）
+    out = Image.new("RGBA", img.size, tuple(ink[:3]) + (0,))
+    out.putalpha(alpha)
     return out
 
 

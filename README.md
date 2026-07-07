@@ -72,7 +72,7 @@ ln -s ~/Projects/agent-assets/agents/<name>.md ~/.claude/agents/<name>.md
 | deploy-astro-cloudflare | Astro 7 + `@astrojs/cloudflare` v14 構成専用。Workers Builds（GitHub 連携）・ローカル `wrangler deploy`・プレビューの 3 モード + プリフライト検証（バージョン・wrangler.jsonc・認証）・デプロイ完了確認・ロールバック | [docs/deploy-astro-cloudflare.md](docs/deploy-astro-cloudflare.md) |
 | cloudflare-lesson-tutor | Cloudflare 学習カリキュラムの授業運営。Dashboard.md で現在地把握 → 一次情報で鮮度検証（retrieval 優先・フレームワークは公式 docs を正）→ 対話形式で 1 セクション授業 → 保存案内。Vault へは読み取りのみ | [docs/cloudflare-lesson-tutor.md](docs/cloudflare-lesson-tutor.md) |
 | cloudflare-lesson-note | 学習セッションの内容を技術ブログ品質の Obsidian ノートに整形・保存し、Dashboard.md の進捗を更新（Vault への唯一のライター）。上書き保護・鮮度メタデータ（`verified`）つき。保存先は `$LESSON_VAULT_PATH` で指定、特定 Vault に非依存 | [docs/cloudflare-lesson-note.md](docs/cloudflare-lesson-note.md) |
-| print-card-comp | 印刷物（名刺・しおり・ポストカード・DL カード等）の表裏デザインカンプを依頼内容から一括生成。QR 生成（segno）・PIL 合成（文字化けなし）・入稿指示書まで。背景は gen-nanobanana-images / gpt-image-2 を委譲利用 | [docs/print-card-comp.md](docs/print-card-comp.md) |
+| print-card-comp | 印刷物（名刺・しおり・ポストカード・DL・ショップ/二つ折りカード等）の表裏デザインカンプを依頼内容から一括生成。色数対応（4C/1C/2C 特色）・レイアウトパターン 8 種・縦書き/字間/duotone 組版・QR 生成（segno）・合成後セルフレビュー・入稿指示書まで。背景は gen-nanobanana-images / gpt-image-2 を委譲利用 | [docs/print-card-comp.md](docs/print-card-comp.md) |
 | mac-gui-router | Mac の GUI 操作・スクショ依頼の方式判定ルーター。公式 computer-use / 自作ループ（screencapture + CGEvent）/ chrome-devtools から最適を選び、操作 = 公式・撮影 = 自作のハイブリッド（操作マニュアル作成）にも対応。要ヘルパー 3 種（付属手順でビルド） | [docs/mac-gui-router.md](docs/mac-gui-router.md) |
 
 ## サブエージェント一覧

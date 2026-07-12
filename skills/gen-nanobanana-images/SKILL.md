@@ -214,6 +214,41 @@ For industry-specific templates and advanced techniques, see `references/prompt-
 
 If in-image text is garbled, either **regenerate** (wrap the text in `「」`/double quotes, shorten it, specify font) or advise the user to **overlay the text afterward in Figma/Photoshop**. Do not deliver an image with garbled text without flagging it.
 
+## Generation Record (生成記録.md) — Mandatory
+
+**After every generation run (single image or batch), write a `生成記録.md` into the output directory.** Do this after Post-Generation Verification so the record can include the verification notes.
+
+Rules:
+
+- **One record file per output directory.** If `生成記録.md` already exists there (follow-up batch, multi-turn continuation), **append a new dated section** — never overwrite past records.
+- **Keep the output directory clean**: images + `生成記録.md` (+ `session_*.json` for multi-turn) only. Redirect any execution logs to the scratchpad — never leave per-image `.log` files in the output directory.
+- **Multi-turn sessions**: append each turn (prompt + produced file) as a subsection under the same record.
+- Write the record **in Japanese**, with this structure:
+
+```markdown
+# <内容の短いタイトル> ─ 生成記録
+
+- 生成日: YYYY-MM-DD
+- スキル: gen-nanobanana-images
+- モデル: <正式名>（`<model ID>`）
+- 設定: アスペクト比 ／ 解像度 ／ 実行形態（-N 枚数・並列・マルチターン等）
+- 料金目安: **約 $X.XX**（$<単価>/枚 × <枚数>。Cost Guide の表から算出し、tier と価格時点を添える）
+
+## ユーザーの指示（原文）
+
+> （ユーザーの依頼文をそのまま引用。スラッシュコマンド経由ならコマンドごと）
+
+## 各画像の生成プロンプト
+
+### <ファイル名> ─ <日本語の短い内容サマリ>
+
+（実際に API へ送ったプロンプト全文をコードブロックで。入力画像 `-i`・参照画像 `-r` を使った場合はそのパスも記載）
+
+## 検証メモ
+
+（Post-Generation Verification で気づいた点: 破綻・文字化け・再生成推奨など。問題なしならその旨を 1 行）
+```
+
 ## Text-to-Image Generation
 
 Generate a new image from a text prompt.

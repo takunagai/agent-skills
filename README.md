@@ -74,6 +74,8 @@ ln -s ~/Projects/agent-assets/agents/<name>.md ~/.claude/agents/<name>.md
 | cloudflare-lesson-note | 学習セッションの内容を技術ブログ品質の Obsidian ノートに整形・保存し、Dashboard.md の進捗を更新（Vault への唯一のライター）。上書き保護・鮮度メタデータ（`verified`）つき。保存先は `$LESSON_VAULT_PATH` で指定、特定 Vault に非依存 | [docs/cloudflare-lesson-note.md](docs/cloudflare-lesson-note.md) |
 | print-card-comp | 印刷物（名刺・しおり・ポストカード・DL・ショップ/二つ折りカード等）の表裏デザインカンプを依頼内容から一括生成。色数対応（4C/1C/2C 特色）・レイアウトパターン 8 種・縦書き/字間/duotone 組版・QR 生成（segno）・合成後セルフレビュー・入稿指示書まで。背景は gen-nanobanana-images / gpt-image-2 を委譲利用 | [docs/print-card-comp.md](docs/print-card-comp.md) |
 | mac-gui-router | Mac の GUI 操作・スクショ依頼の方式判定ルーター。公式 computer-use / 自作ループ（screencapture + CGEvent）/ chrome-devtools から最適を選び、操作 = 公式・撮影 = 自作のハイブリッド（操作マニュアル作成）にも対応。要ヘルパー 3 種（付属手順でビルド） | [docs/mac-gui-router.md](docs/mac-gui-router.md) |
+| claude-config-audit | `~/.claude` グローバル設定の健全性検査。死 symlink・disabled なのにキャッシュ残存の plugin・MCP 重複登録・orphan commands を検出。レポートのみ・自動削除なし。pre-add モードで追加前の重複チェックも可能 | [docs/claude-config-audit.md](docs/claude-config-audit.md) |
+| handover-scaffold | 別セッションで無人実行させる「指示書（引き継ぎドキュメント）」の骨組みを一発生成。`handover/` バッチのフォルダ・`00_実行順.md` マニフェスト・指示書スケルトンを規約どおりに作成 | [docs/handover-scaffold.md](docs/handover-scaffold.md) |
 
 ## サブエージェント一覧
 

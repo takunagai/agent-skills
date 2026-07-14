@@ -61,49 +61,40 @@ pnpm exec wrangler r2 bucket create emdash-media
 pnpm exec wrangler kv namespace create CACHE     # 出力の id を kv_namespaces に転記（Object Cache 使用時のみ）
 ```
 
-EmDash docs には「初回デプロイ時に存在しなければ wrangler が自動プロビジョニングする」との記載もあるが、非対話環境（Workers Builds 等）では効かない場合があるため、上記の明示作成を推奨する。接続済みなら `cloudflare-bindings` MCP でも作成・確認できる（後述の「MCP 連携」）。
+EmDash docs には「初回デプロイ時に存在しなければ wrangler が自動プロビジョニングする」との記載もあり、実際に公式テンプレートの `wrangler.jsonc` は `database_id` を持たない（自動プロビジョニング前提の作り ─ 2026-07-14 実機確認）。ただし非対話環境（Workers Builds 等）では効かない場合があるため、確実にやるなら上記の明示作成 + ID 転記。接続済みなら `cloudflare-bindings` MCP でも作成・確認できる（後述の「MCP 連携」）。
 
 ## astro.config.mjs 設定
 
-> [!important] ローカルは SQLite・本番は D1 の出し分けを筆頭例にする
-> D1 / R2 の binding は Cloudflare Workers 上にしか存在しないため、素の `d1(...)` / `r2(...)` を単体で書くとローカルの `pnpm exec emdash dev` が動かない。**Cloudflare 構成でも最初から `import.meta.env.PROD` で出し分ける形で書く**（SKILL.md 設定章と同型）。
+> [!important] 既定はテンプレート準拠の素の `d1()` / `r2()`（2026-07-14 実機確認）
+> ローカル開発は `pnpm dev`（= `astro dev`）で、`@astrojs/cloudflare` が miniflare によるローカル D1 / R2 エミュレーション（`.wrangler/state/`）を提供するため、素の `d1()` / `r2()` のままで wrangler ログイン不要で動く。公式テンプレートもこの形。
 
-```js title="astro.config.mjs"
+```js title="astro.config.mjs（テンプレート準拠の既定形）"
 import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
-import emdash, { local } from "emdash/astro";
-import { sqlite } from "emdash/db";
+import emdash from "emdash/astro";
 import { d1, r2, kvCache } from "@emdash-cms/cloudflare";
-
-const isProd = import.meta.env.PROD;
 
 export default defineConfig({
   output: "server",
   adapter: cloudflare(),
   integrations: [
     emdash({
-      database: isProd
-        ? d1({ binding: "DB" })
-        : sqlite({ url: "file:./data.db" }),
-      storage: isProd
-        ? r2({ binding: "MEDIA" })
-        : local({
-            directory: "./public/uploads",
-            baseUrl: "/_emdash/api/media/file",
-          }),
-      objectCache: isProd ? kvCache({ binding: "CACHE" }) : undefined, // 任意（ローカルは KV binding が無い）
+      database: d1({ binding: "DB", session: "auto" }),
+      storage: r2({ binding: "MEDIA" }),
+      objectCache: kvCache({ binding: "CACHE" }), // 任意
     }),
   ],
 });
 ```
 
-`d1()` / `r2()` / `kvCache()` / `hyperdrive()` はすべて `@emdash-cms/cloudflare` パッケージからの named export。`local` / `sqlite` はローカル用で、それぞれ `emdash/astro` / `emdash/db` から取る。
+`d1()` / `r2()` / `kvCache()` / `hyperdrive()` はすべて `@emdash-cms/cloudflare` パッケージからの named export。なお公式テンプレートは上記に加え `sandboxed: [...]`・`sandboxRunner: sandbox()`・`marketplace: "https://marketplace.emdashcms.com"` も設定している（`marketplace` はマーケットプレイスの参照先を指定する実在オプション ─ テンプレート実物で確認）。
 
-## ローカル開発とD1
+## ローカル開発の 2 系統
 
-D1 は Cloudflare Workers 専用のため、ローカル開発では素の SQLite に切り替えるのが公式パターン。上記 astro.config.mjs の環境出し分けを設定してあれば、ローカルで追加作業は要らない（`wrangler dev` を別途起動する必要もない）。
+Cloudflare 構成のローカル開発には**互いに DB を共有しない 2 系統**がある（詳細な比較表は SKILL.md「ローカル開発の 2 系統」）。
 
-`pnpm exec emdash dev` コマンド自体が、ローカル SQLite ファイル（既定 `./data.db`）とローカルファイルストレージを直接使う設計で、本番の D1 / R2 に触れずに開発できる（`cli.md` 参照）。
+- **系統 A（既定）**: `pnpm dev` = `astro dev`。miniflare のローカル D1（`.wrangler/state/`）で動く。コンテンツ投入は管理画面から。`emdash seed` / `doctor` はこの DB を見ないため使えない
+- **系統 B（CLI 併用時のみ）**: `import.meta.env.PROD ? d1(...) : sqlite({ url: "file:./data.db" })` の出し分け（公式 database.mdx のパターン）+ ストレージも `local({ directory, baseUrl })` に出し分ける。さらにテンプレートの `pnpm-workspace.yaml` の `allowBuilds: better-sqlite3` を `true` にして `pnpm rebuild better-sqlite3` を実行しないと、`emdash init` が "Failed to create database" で失敗する（2026-07-14 実機確認）。設定後は `emdash init` → `emdash seed` → `emdash dev` / `doctor` が使える
 
 ## データベースオプション
 

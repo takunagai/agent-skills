@@ -17,6 +17,9 @@ pnpm exec emdash --version
 - **ローカル DB 直接操作**: `export-seed` など、実行中のサーバーを介さず SQLite/D1 ファイルを直接読む
 - **リモート API 経由**: `content` / `schema` / `media` / `search` / `taxonomy` / `menu` など、稼働中の EmDash インスタンス（ローカル dev サーバーでも本番でも可）に REST でアクセスする
 
+> [!warning] Cloudflare テンプレートでは `init` / `seed` / `doctor` / `dev` はそのままでは動かない（2026-07-14 実機確認）
+> ローカル DB 直接操作系（`init` / `seed` / `doctor` / `dev`）は素の SQLite `./data.db` を対象とし、`pnpm dev`（= `astro dev`）が使う miniflare のローカル D1（`.wrangler/state/`）とは**別の DB**。さらに Cloudflare テンプレートは `pnpm-workspace.yaml` の `allowBuilds` で `better-sqlite3: false` を指定しているため、そのまま実行すると "Failed to create database" で失敗する。使うには `better-sqlite3: true` に変更 → `pnpm rebuild better-sqlite3` → `pnpm exec emdash init` の順で SQLite 世界を初期化する（詳細は SKILL.md「ローカル開発の 2 系統」）。
+
 ## 認証
 
 リモートコマンドは次の優先順位で認証情報を解決する。

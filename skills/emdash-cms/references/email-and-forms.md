@@ -58,7 +58,7 @@ Worker コード側からは `env.EMAIL.send({ to, from, subject, html, text })`
 
 ## EmDash 公式メール機構 ─ capability 3 分類
 
-`skills/creating-plugins/SKILL.md`（191〜210 行付近）と `reference/capabilities.mdx` が定義する、メール関連の 3 つの capability。
+`skills/creating-plugins/SKILL.md`（191〜210 行付近）と `docs/src/content/docs/plugins/creating-plugins/capabilities.mdx` が定義する、メール関連の 3 つの capability。
 
 | capability | 役割 | 対応するフック |
 |---|---|---|

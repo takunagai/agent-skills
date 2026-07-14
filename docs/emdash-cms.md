@@ -183,6 +183,8 @@ skills/emdash-cms/
 **うまくいく典型**: コンテンツ資産は厚いが、機能はブログ / コーポレートサイト相当。
 **うまくいかない典型**: EC・会員制・ページビルダー製の LP 群 ─ これは移行ではなく再構築案件です。
 
+この判定フローは実行側にも実装済みです（`skills/emdash-cms/references/wordpress-migration.md` の「移行可否の事前判定」）。エージェントがインポート前に同じ観点で自己判定します。
+
 詳細な変換仕様（Gutenberg ブロック対応表・ステータスマッピング・リダイレクトマップ・WordPress → EmDash 概念対応表）は `skills/emdash-cms/references/wordpress-migration.md` を参照してください。
 
 ---

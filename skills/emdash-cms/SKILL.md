@@ -79,6 +79,12 @@ export default defineConfig({
 });
 ```
 
+統合時の補足:
+
+- **マイグレーション**: 保留中のマイグレーションは `pnpm exec emdash dev` の初回起動時に自動適用される（本番は初回ブートストラップで自動。詳細は `references/cloudflare-deploy.md`）。
+- **パス衝突**: EmDash は `/_emdash/` 配下（admin・API・media）を占有する。既存ルートとの衝突が無いか統合前に確認する。
+- **Cloudflare 構成で統合する場合**: 後方の「設定（Cloudflare 既定）」節の環境出し分けの形（ローカル SQLite / 本番 D1）を使う。
+
 ### TailwindCSS v4 と Biome 2 の併用
 
 TailwindCSS は v4 の CSS-first 方式を使う。`@tailwindcss/vite` を Vite プラグインに追加し、CSS 側は `@import "tailwindcss";` の 1 行のみ（`tailwind.config.js` は作らない）。
@@ -121,8 +127,11 @@ export default defineConfig({
         ? d1({ binding: "DB" })
         : sqlite({ url: "file:./data.db" }),
       storage: isProd
-        ? r2({ binding: "MEDIA", publicUrl: "https://pub-xxxx.r2.dev" })
-        : local({ dir: "./public/uploads" }),
+        ? r2({ binding: "MEDIA", publicUrl: "https://pub-xxxx.r2.dev" }) // 実バケットの公開 URL に置換（R2 の Public access 有効化後に取得）
+        : local({
+            directory: "./public/uploads",
+            baseUrl: "/_emdash/api/media/file",
+          }),
     }),
   ],
 });
@@ -146,6 +155,7 @@ export { default, PluginBridge } from "@emdash-cms/cloudflare/worker";
   "compatibility_date": "2026-07-13", // ← 生成時点の日付を入れる（固定値をコピーしない）
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
+    // database_id は `pnpm exec wrangler d1 create <name>` の出力から転記する
     { "binding": "DB", "database_name": "emdash-db", "database_id": "<id>" }
   ],
   "r2_buckets": [
@@ -191,24 +201,30 @@ pnpm exec emdash types   # スキーマから TypeScript 型を生成
 ```ts
 import { getEmDashCollection, getEmDashEntry } from "emdash";
 
-// 一覧（公開済みを新しい順に 10 件）
-const posts = await getEmDashCollection("posts", {
-  filter: { status: "published" },
-  sort: { publishedAt: "desc" },
+// 一覧（公開済みを新しい順に 10 件）。戻り値は分割代入で受ける
+const { entries: posts } = await getEmDashCollection("posts", {
+  status: "published",
+  orderBy: { published_at: "desc" },
   limit: 10,
 });
 
-// ページネーション
-const page2 = await getEmDashCollection("posts", { limit: 10, offset: 10 });
+// ページネーション（offset ベースが基本）
+const { entries: page2 } = await getEmDashCollection("posts", {
+  limit: 10,
+  offset: 10,
+});
+// 大量データは nextCursor / hasMore でカーソル継続もできる（前回の nextCursor を cursor オプションに渡す）
 
-// タクソノミーでフィルタ
-const tagged = await getEmDashCollection("posts", {
-  filter: { tags: { contains: "astro" } },
+// タクソノミー・フィールドで絞り込み（where はフィールド名→値。ネスト演算子は無い）
+const { entries: tagged } = await getEmDashCollection("posts", {
+  where: { tags: "astro" },
 });
 
-// 単体（slug で 1 件）
-const post = await getEmDashEntry("posts", { slug: "hello-world" });
+// 単体（slug または ID で 1 件）。第 2 引数は文字列
+const { entry: post } = await getEmDashEntry("posts", "hello-world");
 ```
+
+`getEmDashCollection(name, options)` の options は `status?`（トップレベル、`"published"` 等）・`where?: Record<string, string | string[]>`（フィールド／タクソノミー絞り込み）・`orderBy?: { [field]: "asc" | "desc" }`（複数指定可。フィールド名は snake_case、例 `published_at`）・`limit?` / `offset?` / `cursor?`。戻り値は `{ entries, error, nextCursor, hasMore }`。`getEmDashEntry(collection, slugOrId)` の第 2 引数は文字列で、戻り値は `{ entry, error, isPreview }`。
 
 フィールド型は 16 種 ─ `string` / `text` / `url` / `number` / `integer` / `boolean` / `datetime` / `select` / `multiSelect` / `portableText` / `image` / `file` / `reference` / `json` / `slug` / `repeater`。正本は `docs/src/content/docs/reference/field-types.mdx`。
 
@@ -220,7 +236,8 @@ const post = await getEmDashEntry("posts", { slug: "hello-world" });
 ---
 import { PortableText } from "emdash/ui";
 import CustomImage from "../components/CustomImage.astro";
-const post = await getEmDashEntry("posts", { slug: Astro.params.slug });
+const { entry: post } = await getEmDashEntry("posts", Astro.params.slug);
+if (!post) return Astro.redirect("/404");
 ---
 <PortableText
   value={post.data.content}

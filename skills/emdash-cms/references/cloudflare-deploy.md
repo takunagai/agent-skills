@@ -18,13 +18,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "my-emdash-site",
-  "main": "@astrojs/cloudflare/entrypoints/server",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-07-13", // 生成時点の日付を使う（固定推奨値は無い）
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./dist", "binding": "ASSETS" },
 
   "d1_databases": [
-    { "binding": "DB", "database_name": "emdash-db" }
+    { "binding": "DB", "database_name": "emdash-db", "database_id": "<id>" }
   ],
 
   "r2_buckets": [
@@ -45,49 +45,65 @@
 }
 ```
 
-- `d1_databases` / `r2_buckets` は初回デプロイ時に存在しなければ wrangler が自動プロビジョニングする
-- `kv_namespaces` は Object Cache（後述）を使う場合のみ必要。事前に `pnpm exec wrangler kv namespace create CACHE` でネームスペースを作成し、返ってきた `id` を設定する
+- **`main` は `src/worker.ts` を指す**。EmDash の `PluginBridge` を再エクスポートするエントリ（`export { default, PluginBridge } from "@emdash-cms/cloudflare/worker";`）を通す必要があるため、`@astrojs/cloudflare` の既定エントリを直接指定しない（指定するとスケジュール公開・sandboxed プラグインが動かなくなる。後述のトラブルシューティング表と整合）
+- `kv_namespaces` は Object Cache（後述）を使う場合のみ必要
 - `send_email` は EmDash 公式メールプラグイン `cloudflareEmail()` を使う場合のみ必要（後述）
 - `triggers.crons` はスケジュール公開・プラグイン cron を使う場合に必須（後述）
 - `worker_loaders`（Dynamic Workers）は sandboxed プラグインを使う場合のみ必要。既定構成には含めない（後述）
 
+### 実リソースの作成
+
+バインディングが参照する D1 / R2 / KV は、明示的に作成して ID を `wrangler.jsonc` に転記するのが確実な手順。
+
+```bash
+pnpm exec wrangler d1 create emdash-db          # 出力の database_id を d1_databases に転記
+pnpm exec wrangler r2 bucket create emdash-media
+pnpm exec wrangler kv namespace create CACHE     # 出力の id を kv_namespaces に転記（Object Cache 使用時のみ）
+```
+
+EmDash docs には「初回デプロイ時に存在しなければ wrangler が自動プロビジョニングする」との記載もあるが、非対話環境（Workers Builds 等）では効かない場合があるため、上記の明示作成を推奨する。接続済みなら `cloudflare-bindings` MCP でも作成・確認できる（後述の「MCP 連携」）。
+
 ## astro.config.mjs 設定
+
+> [!important] ローカルは SQLite・本番は D1 の出し分けを筆頭例にする
+> D1 / R2 の binding は Cloudflare Workers 上にしか存在しないため、素の `d1(...)` / `r2(...)` を単体で書くとローカルの `pnpm exec emdash dev` が動かない。**Cloudflare 構成でも最初から `import.meta.env.PROD` で出し分ける形で書く**（SKILL.md 設定章と同型）。
 
 ```js title="astro.config.mjs"
 import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
-import emdash from "emdash/astro";
+import emdash, { local } from "emdash/astro";
+import { sqlite } from "emdash/db";
 import { d1, r2, kvCache } from "@emdash-cms/cloudflare";
+
+const isProd = import.meta.env.PROD;
 
 export default defineConfig({
   output: "server",
   adapter: cloudflare(),
   integrations: [
     emdash({
-      database: d1({ binding: "DB" }),
-      storage: r2({ binding: "MEDIA" }),
-      objectCache: kvCache({ binding: "CACHE" }), // 任意
+      database: isProd
+        ? d1({ binding: "DB" })
+        : sqlite({ url: "file:./data.db" }),
+      storage: isProd
+        ? r2({ binding: "MEDIA" })
+        : local({
+            directory: "./public/uploads",
+            baseUrl: "/_emdash/api/media/file",
+          }),
+      objectCache: isProd ? kvCache({ binding: "CACHE" }) : undefined, // 任意（ローカルは KV binding が無い）
     }),
   ],
 });
 ```
 
-`d1()` / `r2()` / `kvCache()` / `hyperdrive()` はすべて `@emdash-cms/cloudflare` パッケージからの named export。
+`d1()` / `r2()` / `kvCache()` / `hyperdrive()` はすべて `@emdash-cms/cloudflare` パッケージからの named export。`local` / `sqlite` はローカル用で、それぞれ `emdash/astro` / `emdash/db` から取る。
 
 ## ローカル開発とD1
 
-D1 は Cloudflare Workers 専用のため、ローカル開発では素の SQLite に切り替えるのが公式パターン。`wrangler dev` を別途起動する必要はなく、環境に応じてアダプタを出し分ける。
+D1 は Cloudflare Workers 専用のため、ローカル開発では素の SQLite に切り替えるのが公式パターン。上記 astro.config.mjs の環境出し分けを設定してあれば、ローカルで追加作業は要らない（`wrangler dev` を別途起動する必要もない）。
 
-```js title="astro.config.mjs"
-import { sqlite } from "emdash/db";
-import { d1 } from "@emdash-cms/cloudflare";
-
-const database = import.meta.env.PROD ? d1({ binding: "DB" }) : sqlite({ url: "file:./data.db" });
-
-export default defineConfig({ integrations: [emdash({ database })] });
-```
-
-`pnpm exec emdash dev` コマンド自体もローカル SQLite ファイル（既定 `./data.db`）を直接使う設計になっている（`cli.md` 参照）。
+`pnpm exec emdash dev` コマンド自体が、ローカル SQLite ファイル（既定 `./data.db`）とローカルファイルストレージを直接使う設計で、本番の D1 / R2 に触れずに開発できる（`cli.md` 参照）。
 
 ## データベースオプション
 

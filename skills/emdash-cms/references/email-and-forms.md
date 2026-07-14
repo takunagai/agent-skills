@@ -221,6 +221,8 @@ emdash({
 
 capabilities: `email:send` / `media:write` / `network:request`（Turnstile 検証・添付ファイル保存・Webhook 送信のため）。
 
+送信データはストレージコレクション `forms` / `submissions` に保存され、`submissions/list` ルートで一覧できる。CSV 等へのエクスポート機能も実装に含まれる（`packages/plugins/forms` で確認。エクスポートの具体的な操作手順は未検証 ─ 使う際は管理画面の submissions 一覧まわりを実際に確認する）。
+
 ### スパム対策 3 種
 
 フォームごとに `settings.spamProtection` で選ぶ。既定値は `formsPlugin()` の `defaultSpamProtection` オプション。

@@ -276,7 +276,7 @@ if (user.role < 30) return new Response("Forbidden", { status: 403 });
 - **sandboxed（既定・マーケットプレイス配布形式）**: Worker isolate（Dynamic Workers）で隔離実行する。`emdash-plugin.jsonc`（manifest）+ エントリコードで構成し、`emdash()` の `sandboxed: []` 配列に登録する。信頼できない第三者コードを安全に動かせるのが利点。ただし Workers Paid 必須（前掲）。
 - **native（trusted）**: `emdash()` の `plugins: []` 配列に登録する。React 製の管理 UI・Portable Text コンポーネント・ページフラグメントを提供する必要がある場合はこちら。トラストレベルは高いがサンドボックス隔離は無い。
 
-判断基準 ─ **管理 UI / Portable Text コンポーネント / page fragments が要るなら native、それ以外は sandboxed 推奨**。capabilities・hooks・manifest スキーマ・最小テンプレートの詳細は `references/plugin-development.md` を参照する。
+判断基準 ─ **フル React 管理画面 / Portable Text レンダリングコンポーネント / page fragments が要るなら native、それ以外は sandboxed 推奨**（sandboxed でも manifest の `admin.pages` / `admin.widgets` で簡易な管理ページは提供できる）。capabilities・hooks・manifest スキーマ・最小テンプレートの詳細は `references/plugin-development.md` を参照する。
 
 ## メール・フォーム
 

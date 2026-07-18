@@ -13,6 +13,8 @@ TRex CLI(`trex --input`)はバッチ用途でハングし stdout に結果を返
 | `ocr.swift` | Vision OCR CLI のソース（`VNRecognizeTextRequest`、ja+en） |
 | `ocr`（gitignore） | 上をビルドしたバイナリ。約 345ms/枚（warm） |
 | `ocr-images.sh` | フォルダ一括 OCR → .md インデックス生成ラッパー |
+| `video-captions.sh` | 動画の焼き込みテロップ/字幕を抽出 → captions.txt / srt |
+| `dedupe_captions.py` | 隣接する類似キャプションを縮約（video-captions.sh が使用） |
 
 ## ビルド
 
@@ -42,6 +44,23 @@ OCR_INDEX_DIR=~/ocr-index ./ocr-images.sh ~/Downloads/screenshots
 ./ocr-images.sh ~/Downloads/screenshots --txt
 ```
 
+### 動画の焼き込みテロップ/字幕を抽出
+
+```bash
+# 1 秒間隔でサンプリング → <ベース名>.captions.txt を生成
+./video-captions.sh demo.mp4
+
+# srt も出力・字幕は画面下 1/3 に多いので --crop-bottom でノイズ減
+./video-captions.sh demo.mp4 --srt --crop-bottom
+
+# シーン変化検出モード（実写の目安 0.3）
+./video-captions.sh demo.mp4 --scene 0.3 --srt
+```
+
+- 対応: `.mp4` / `.mov`。画面に焼き込まれたテロップの OCR のみ（音声・字幕トラックは対象外）
+- 連続フレームで同一テロップが数百回重複するのを、抽出時の間引き（`--interval` / `--scene`）と OCR 後の隣接 dedupe（`dedupe_captions.py`）の両方で除去する
+- 目安処理量: 1 秒間隔の 10 分動画 ≈ 600 フレーム × 約 345ms ≈ 3.5 分
+
 ## 仕様メモ
 
 - 対応形式: png / jpg / jpeg / webp / heic（大小不問）。フォルダ直下のみ・再帰しない・昇順
@@ -54,4 +73,4 @@ OCR_INDEX_DIR=~/ocr-index ./ocr-images.sh ~/Downloads/screenshots
 - 領収書・レシートの文字化（機微情報をクラウドに出さずローカル完結）
 - 過去資料・名刺・書籍ページ写真の一括デジタル化
 - 既存サイトのスクショ/バナーから文言だけ一括抽出
-- 動画フレームからのテロップ/字幕抽出（→ 兄弟スクリプトで扱う）
+- 動画フレームからのテロップ/字幕抽出（`video-captions.sh`）

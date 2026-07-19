@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<ruleset name="WordPress-JA">
+    <description>WordPress Coding Standards + 日本語コメント対応の共通カスタマイズ（全 WP 案件の既定。案件固有の除外が必要な場合はこのファイルをコピーして fork する）</description>
+
+    <rule ref="WordPress">
+        <!-- 日本語コメントの @param 説明は末尾が「。」等になり ASCII ピリオドで
+             終わらないため、full-stop 強制を除外する -->
+        <exclude name="Squiz.Commenting.FunctionComment.ParamCommentFullStop"/>
+        <!-- 設定例・代替実装・@todo など意図的な参照コメントを残す方針のため、
+             コメントアウトコード検出を除外する -->
+        <exclude name="Squiz.PHP.CommentedOutCode"/>
+    </rule>
+
+    <!-- インラインコメント末尾文字のチェックを無効化（日本語コメント対応） -->
+    <rule ref="Squiz.Commenting.InlineComment.InvalidEndChar">
+        <severity>0</severity>
+    </rule>
+</ruleset>
